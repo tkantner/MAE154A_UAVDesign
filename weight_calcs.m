@@ -1,6 +1,6 @@
 %MAE 154A Preliminary Weight Calculations
 
-%This script uses randomly generated specs to determine designs that meet
+%This script uses randomly generated parameters to determine designs that meet
 %our specs. It uses an xls (Excel) file known as 'Engine_Database.xlsx'
 %to pull data about engines, and uses a function called getEngineWeight to
 %determine the weight from this database. Results are saved to a xls file
@@ -49,7 +49,7 @@ W_i = 100; %Initial Weight estimate [lbs]
 C_L = 1.2; %Coefficient of Lift guess [-]
 C_D0 = 0.030; %Parasitic drag coeff, typical value [-]
 
-outer_iter = 2000; 
+outer_iter = 1000; 
 for k = 0:outer_iter
 
 %Random design parameter guesses
@@ -59,16 +59,16 @@ lam_1_4 = 0; %Wing Quarter chord sweep [rad]
 lam = 1;   %Taper ratio [-]
 thicc = .15*rand;  %Maximum thickness ratio (Last 2 digits of NACA) [-]
 N = 1 + rand;  %Ultimate load factor [-]
-L_fuse = rand*5; %Length of fuselage [ft]
-Wid_fuse = rand*2;  %Width of fuselage [ft]
-D_fuse = rand*2; %Depth of fuselage [ft]
-S_ht = 5*rand; %Horizontal tail surface area [ft^2]
-l_t = 5*rand; %Distance from wing 1/4 MAC to tail 1/4 MAC [ft]
-b_h = 2*rand; %Horizontal tail span [ft]
-t_HR = 2*rand; %Horizontal tail max root thickness [in]
-S_vt = 5*rand; %Vertical tail surface area [ft^2] 
-b_v = 2*rand; %Vertical tail span [ft]
-t_VR = 2*rand; %Vertical tail max root thickness [in]
+L_fuse = 2 + rand*3; %Length of fuselage [ft]
+Wid_fuse = 1 + rand;  %Width of fuselage [ft]
+D_fuse = 1 + rand; %Depth of fuselage [ft]
+S_ht = 1 + 3*rand; %Horizontal tail surface area [ft^2]
+l_t = 1.5 + 3*rand; %Distance from wing 1/4 MAC to tail 1/4 MAC [ft]
+b_h = 1 + 2*rand; %Horizontal tail span [ft]
+t_HR = 3*rand; %Horizontal tail max root thickness [in]
+S_vt = 1 + 3*rand; %Vertical tail surface area [ft^2] 
+b_v = 1 + 2*rand; %Vertical tail span [ft]
+t_VR = 3*rand; %Vertical tail max root thickness [in]
 
 %Iteration stuff
 i = 0;
@@ -113,12 +113,12 @@ while(i < max_iter)
     P_req_10k = D_10k.*v; %Power required @ 10k [ft*lbs/s]
     P_req_10k = P_req_10k/550;  %Power required @ 10k[hp]
     P_av_10k = P_ex + P_req_10k;  %Power required @ 10k [hp]
-    P_engine_10k = max(P_av_10k); %Power the engine needs to produce @ 10k [hp]
+    P_engine_10k = max(P_av_10k)/eta_pr_loit; %Power the engine needs to produce @ 10k [hp]
     
     P_req_sl = D_sl.*v; %Power required @ SL [ft*lbs/s]
     P_req_sl = P_req_sl/550;  %Power required @ SL [hp]
     P_av_sl = P_ex + P_req_sl;  %Power required @ SL [hp]
-    P_engine_sl = max(P_av_sl); %Power the engine needs to produce @ SL [hp]
+    P_engine_sl = max(P_av_sl)/eta_pr_loit; %Power the engine needs to produce @ SL [hp]
     
     % Find worst case
     if(P_engine_sl > P_engine_10k)
@@ -168,6 +168,7 @@ while(i < max_iter)
         Good_designs(design_num).b_v = b_v; %Vertical tail span [ft]
         Good_designs(design_num).t_VR = t_VR; %Vertical tail max root thickness [in]
         Good_designs(design_num).eng_ind = index;  %Engine index
+        Good_designs(design_num).eng_hp = engines(index,1);  %Engine power [hp]
         
         %Increase iteration index to break out
         i = max_iter;

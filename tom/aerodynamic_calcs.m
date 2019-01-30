@@ -40,7 +40,7 @@ e = designs(r - 1, 6);  %Median Oswald's eff [-]
 S_ht = designs(r - 1, 14); %Median Horizontal Tail Area [ft^2]
 l_t = designs(r - 1, 15); %Median l_t [ft]
 CD_0 = 0.03; %Parasitic Drag Coefficient [-]
-c = 1;  %Chord length [ft]
+chord = 1;  %Chord length [ft]
 
 %Calculations at SL
 v_sl = 75:1:v_max_sl; %Velocity vector [fps]
@@ -62,9 +62,21 @@ hold on;
 plot(v_sl, D_sl);
 plot(v_10k, D_10k);
 grid on;
-title('Drag vs. Velocity');
+title({'Drag vs. Velocity';...
+    [' W = ', num2str(W),' lbs, S_w = ', num2str(S_w), ' ft^2, A = ', num2str(A)]});
 xlabel('Velocity [fps]'); ylabel('Drag [lbf]');
 legend('Sea Level', '10,000 feet');
+
+figure(2)
+hold on;
+plot(v_sl, CL_sl);
+plot(v_10k, CL_10k);
+grid on;
+title({'CL vs. Velocity';...
+    [' W = ', num2str(W),' lbs, S_w = ', num2str(S_w), ' ft^2, A = ', num2str(A)] });
+xlabel('Velocity [fps]'); ylabel('CL [-]');
+legend('Sea Level', '10,000 feet');
+
 
 %L/D values
 LD_sl_max = W/min(D_sl);
@@ -79,4 +91,36 @@ a_w = a_w*360/2/pi; %Wing lift-curve slope [rad^-1]
 a_t = 1.50/10; %Tail lift-curve slope [deg^-1]
 a_t = a_t*360/2/pi; %Tail lift-curve slope [deg^-1]
 
-V_H = l_t*S_ht/(c*S_w); %Tail volume ratio [-]
+%Other Physical Parameters
+
+h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
+epsilon_alpha = .15;  % Downwash efficiency loss [-]
+static_margin = .15;  %Static Margin [-]
+h_cg_i = 1; %COG, wrt wing leading edge, in proportion to chord inital guess[-]
+
+iter = 50; %Number of Iterations for convergence
+hcg_thresh = .01; %Threshold for convergence
+i = 0;
+while (i < iter)
+
+    V_H = l_t*S_ht/(chord*S_w); %Tail volume ratio [-]
+    h_act = l_t/chord + h_cg_i; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
+
+    syms h_cg_sym; %Declare symbol
+    
+    %Solve for center of gravity, wrt wing leading edge, prop to chord [-]
+    eq = (h_acw + h_act*(V_H/(h_act - h_cg_sym))*(a_t/a_w)*(1-epsilon_alpha))...
+        /(1 + (V_H/(h_act - h_cg_sym))*(a_t/a_w)*(1-epsilon_alpha))-(static_margin + h_cg_sym);
+    h_cg_solution_set = vpa(solve(eq == 0, h_cg_sym));  
+    h_cg = double(h_cg_solution_set(1)); %Get value
+    
+    h_n = static_margin + h_cg;  %Static Margin wrt wing leading edge, in proportion to chord [-]
+    
+    if(abs(h_cg - h_cg_i) < hcg_thresh)
+        fprintf('Converged! h_cg = %d\n', h_cg);
+        break;
+    else
+        h_cg_i = h_cg;
+        i = i + 1;
+    end
+end

@@ -6,7 +6,7 @@
 %determine the weight from this database. Results are saved to a xls file
 %called 'Valid_Designs.xls'
 
-clear all; close all; clc;
+clear; close all; clc;
 
 design_num = 0;
 
@@ -29,10 +29,8 @@ v_max_10k = 180;  %Max Speed @ 10k [mph]
 v_max_10k = v_max_10k*5280/3600; %Max speed @ 10k [fps]
 v_stall = 80; %Stall speed @ 10k [mph]
 v_stall = v_stall*5280/3600; %Stall speed @ 10k [mph]
-W_payload = 20; %Weight of the payload
+W_payload = 10; %Weight of the payload
 W_max = 300;  %Max TO weight [lbs] 
-
-
 
 %Cruise Conditions - On our way to the fire
 L_D_cruise = 12;  %L/D Ratio for cruising [-]
@@ -53,12 +51,12 @@ W_fuel_desc_frac = 0.995;  %Descent fuel weight fraction [-]
 W_fuel_land_frac = 0.995;  %Landing fuel weight fraction [-]
 
 %Design Parameters (These should be changed as necessary)
-W_i = 50; %Initial Weight estimate [lbs]
 C_L = 1.2; %Coefficient of Lift guess [-]
-C_D0 = 0.030; %Parasitic drag coeff, typical value [-]
+C_D0 = 0.040; %Parasitic drag coeff, typical value [-]
 
-outer_iter = 10000; 
+outer_iter = 100000; 
 for k = 1:outer_iter
+W_i = 50; %Initial Weight estimate [lbs]
 
 %Random design parameter guesses
 b_w = 5 + 5*rand;  %Wingspan [ft]
@@ -127,18 +125,20 @@ while(i < max_iter)
     P_req_10k = D_10k.*v_10k; %Power required @ 10k [ft*lbs/s]
     P_req_10k = P_req_10k/550;  %Power required @ 10k[hp]
     P_av_10k = P_ex + P_req_10k;  %Power required @ 10k [hp]
-    P_engine_10k = max(P_av_10k)/eta_pr_loit; %Power the engine needs to produce @ 10k [hp]
+    [P_engine_10k, I_10k] = max(P_av_10k); %Get max value and indice
+    P_engine_10k = P_engine_10k/eta_pr_loit; %Power the engine needs to produce @ 10k [hp]
     
     P_req_sl = D_sl.*v_sl; %Power required @ SL [ft*lbs/s]
     P_req_sl = P_req_sl/550;  %Power required @ SL [hp]
     P_av_sl = P_ex + P_req_sl;  %Power required @ SL [hp]
-    P_engine_sl = max(P_av_sl)/eta_pr_loit; %Power the engine needs to produce @ SL [hp]
+    [P_engine_sl , I_sl] = max(P_av_sl); %Get max value and indice
+    P_engine_sl = P_engine_sl/eta_pr_loit; %Power the engine needs to produce @ SL [hp]
     
     % Find worst case
     if(P_engine_sl > P_engine_10k)
-        P_needed = P_engine_sl;
+        P_needed = P_engine_sl; %Power needed by the engine
     else
-        P_needed = P_engine_10k;
+        P_needed = P_engine_10k; %Power needed by the engine [hp]
     end
     
     %Get the index of the engine that we can use
@@ -154,7 +154,7 @@ while(i < max_iter)
     W_eng_tot = 2.575*(W_engine)^.922; %Total Propulsion sys weight [lbs]
     W_fuelsys = 2.49*((Fuel_vol)^.6*(1/2)^.3*(1^.2)*(1^.13))^1.21;  %Fuel system weight [lbs]
     W_contsys= 1.08*W_i^.7;  %Control sys weight [lbs]
-    W_landgear = 5; %Landing gear weight [lbs]
+    W_landgear = 10; %Landing gear weight [lbs]
     
     W_tot = W_payload + W_fuel + W_wing + W_fuse + W_htail +...
         W_vtail + W_eng_tot + W_fuelsys + W_contsys + W_landgear;  %Total aircraft weight [lbs]
@@ -186,7 +186,8 @@ while(i < max_iter)
         Good_designs(design_num).eng_ind = index;  %Engine index
         Good_designs(design_num).eng_hp = engines(index,1);  %Engine power [hp]
         Good_designs(design_num).W_S = W_tot/S_w;    %Wing Loading [lbs/ft^2]
-        Good_designs(design_num).Preq_W = P_needed/W_tot;  %Power Loading [hp/lb]  TODO Fix units
+        Good_designs(design_num).Preq_W = P_needed/W_tot;  %Power Loading [hp/lb]
+        Good_designs(design_num).P_needed = P_needed;  %Power actually require [hp]
         
         %Break out
         break;

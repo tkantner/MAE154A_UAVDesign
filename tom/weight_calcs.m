@@ -29,7 +29,7 @@ v_max_10k = 180;  %Max Speed @ 10k [mph]
 v_max_10k = v_max_10k*5280/3600; %Max speed @ 10k [fps]
 v_stall = 80; %Stall speed @ 10k [mph]
 v_stall = v_stall*5280/3600; %Stall speed @ 10k [mph]
-W_payload = 10; %Weight of the payload
+W_payload = 15; %Weight of the payload (Max-Viz 2300 + avionics)
 W_max = 300;  %Max TO weight [lbs] 
 
 %Cruise Conditions - On our way to the fire
@@ -54,28 +54,28 @@ W_fuel_land_frac = 0.995;  %Landing fuel weight fraction [-]
 C_L = 1.2; %Coefficient of Lift guess [-]
 C_D0 = 0.040; %Parasitic drag coeff, typical value [-]
 
-outer_iter = 100000; 
+outer_iter = 1; 
 for k = 1:outer_iter
 W_i = 50; %Initial Weight estimate [lbs]
 
 %Random design parameter guesses
-b_w = 5 + 5*rand;  %Wingspan [ft]
+b_w = 5;  %Wingspan [ft]
 e = .7; %+ .3*rand; %Rectangular wing efficiency [-]
 lam_1_4 = 0; %Wing Quarter chord sweep [rad]
 lam = 1;   %Taper ratio [-]
-thicc = .1 + .1*rand;  %Maximum thickness ratio (Last 2 digits of NACA) [-]
+thicc = .12;  %Maximum thickness ratio (Last 2 digits of NACA) [-]
 LF = 1.2;  %Load Factor [-]
-N = LF*1.5;  %Ultimate load factor [-]
-L_fuse = 4 + rand*2; %Length of fuselage [ft]
-Wid_fuse = 1.5;  %Width of fuselage [ft]
-D_fuse = 1.5; %Depth of fuselage [ft]
-S_ht = 1 + 3*rand; %Horizontal tail surface area [ft^2]
-l_t = 1.5 + 3*rand; %Distance from wing 1/4 MAC to tail 1/4 MAC [ft]
-b_h = 1 + 2*rand; %Horizontal tail span [ft]
-t_HR = 3*rand; %Horizontal tail max root thickness [in]
-S_vt = 1 + 3*rand; %Vertical tail surface area [ft^2] 
-b_v = 1 + 2*rand; %Vertical tail span [ft]
-t_VR = 3*rand; %Vertical tail max root thickness [in]
+N = 4;  %Ultimate load factor [-]
+L_fuse = 4.5; %Length of fuselage [ft]
+Wid_fuse = (5/6);  %Width of fuselage [ft]
+D_fuse = (5/6); %Depth of fuselage [ft]
+S_ht = 1; %Horizontal tail surface area [ft^2]
+l_t = 3; %Distance from wing 1/4 MAC to tail 1/4 MAC [ft]
+b_h = 2; %Horizontal tail span [ft]
+t_HR = 1.5; %Horizontal tail max root thickness [in]
+S_vt = 1; %Vertical tail surface area [ft^2] 
+b_v = 1; %Vertical tail span [ft]
+t_VR = 1.5; %Vertical tail max root thickness [in]
 
 if(l_t > L_fuse) %Check to see if l_t is greater - not possible
     continue; %Then continue to next iteration
@@ -84,7 +84,7 @@ end
 %Iteration stuff
 i = 0;
 max_iter = 50; %Convergence Iterations
-W_thresh = 10;  %Threshold of weight difference for convergence [lbs]
+W_thresh = .1;  %Threshold of weight difference for convergence [lbs]
 
 
 while(i < max_iter)
@@ -94,10 +94,11 @@ while(i < max_iter)
     %Drag calculations
     A = b_w^2/S_w; % Aspect Ratio
     K = 1/(pi*A*e);
-    v_sl = linspace(0,v_max_sl); % Velocity vector at sea level [fps]
+    C_m = S_w/b_w; %Mean aerodynamic chord
+    v_sl = linspace(50,v_max_sl); % Velocity vector at sea level [fps]
     v_10k = linspace(v_stall, v_max_10k);  %Velocity vector at 10k [fps]
-    D_10k = .5*rho_10k*v_10k.^2*S_w*C_D0 + 2*K*W_i./(rho_10k*v_10k.^2*S_w); %Drag Polar [lbf]
-    D_sl = .5*rho_sl*v_sl.^2*S_w*C_D0 + 2*K*W_i./(rho_sl*v_sl.^2*S_w); %Drag Polar [lbf]
+    D_10k = .5*rho_10k*v_10k.^2*S_w*C_D0 + 2*K*W_i^2./(rho_10k*v_10k.^2*S_w); %Drag Polar [lbf]
+    D_sl = .5*rho_sl*v_sl.^2*S_w*C_D0 + 2*K*W_i^2./(rho_sl*v_sl.^2*S_w); %Drag Polar [lbf]
     
     %Fuel Calculations
     W_fuel_cruise_frac = 1/(exp(R_cruise*c_p_cruise*...
@@ -109,14 +110,11 @@ while(i < max_iter)
     W_fuel = (1-Misn_fuel_frac)*W_i; %Total weight of fuel used [lbs]
     
     %Structure Weight Calculations (Nicolai Eqs)
-    W_wing = 96.948*((W_i^N/10^5)^0.65*(A/cos(lam_1_4))^.57*(S_w/100)^.61*...
-        ((1+lam)/(2*thicc))^.36*(1+(v_max_sl*.592)/500)^.5)^.993; %Weight of the wing [lbs]
-    W_fuse = 200*((W_i^N/10^5)^.286*(L_fuse/10)^.857*...
-        ((Wid_fuse+D_fuse)/10)*(v_max_sl*.592/100)^.338)^1.1;  %Weight of the fuselage [lbs]
-    W_htail = 127*((W_i^N/10^5)^.87*(S_ht/100)^1.2*...
-        (l_t/10)^.483*(b_h/t_HR)^.5)^.458;  %Weight of Horizontal tail [lbs]
-    W_vtail = 98.5*((W_i^N/10^5)^.87*(S_vt/100)^1.2*...
-        (b_v/t_VR)^.5)^.458; %Weight of Vertical tail [lbs]
+    B = W_i*N*S_w*(1.9*A - 4)/(1 + .11*thicc);
+    W_wing = 69*(B*10^-6)^.69; %Weight of the wing [lbs]
+    W_fuse = .11*W_i; %Weight of the fuselage [lbs]
+    W_htail = 1.2*(W_i/3000)^.25*S_ht;  %Weight of Horizontal tail [lbs]
+    W_vtail = 1.28*S_vt; %Weight of Vertical tail [lbs]
     
     %Power calculations
     P_ex = RC*W_i; %Excess power [ft*lbs/s]
@@ -148,15 +146,15 @@ while(i < max_iter)
     if(index ~= 0)
         W_engine = engines(index,2);
     
-    
     %Additional weight values
     Fuel_vol = W_fuel/6.01;  %Volume of fuel [gal]
-    W_eng_tot = 2.575*(W_engine)^.922; %Total Propulsion sys weight [lbs]
+    W_eng_tot = 1.16*W_engine; %Total Propulsion sys weight [lbs]
+    W_nacelle = .175*engines(index,1);  %Nacelle Weight [lbs]
     W_fuelsys = 2.49*((Fuel_vol)^.6*(1/2)^.3*(1^.2)*(1^.13))^1.21;  %Fuel system weight [lbs]
     W_contsys= 1.08*W_i^.7;  %Control sys weight [lbs]
-    W_landgear = 10; %Landing gear weight [lbs]
+    W_landgear = 2.5; %Landing gear weight [lbs]
     
-    W_tot = W_payload + W_fuel + W_wing + W_fuse + W_htail +...
+    W_tot = W_payload + W_fuel + W_wing + W_fuse + W_htail + W_nacelle +...
         W_vtail + W_eng_tot + W_fuelsys + W_contsys + W_landgear;  %Total aircraft weight [lbs]
     
     %Check the weight to the compared weight

@@ -1,4 +1,3 @@
-close all; clear; clc;
 lam=0; %no taper (for now)
 lam_1_4=0; %no wing sweep
 c_r=0.78; %chord length at root (ft)
@@ -18,9 +17,9 @@ lam_LE=atan(tan_LE)*180/pi; %leading edge angle (deg)
 x_mgc=y_mgc*tan_LE; %x location of mgc (ft)
 AR_vt=(b_v^2)/S_vt; %vertical tail AR (unitless)
 T=readtable('/Volumes/KINGSTON/MAE 154A/airfoil_data.xlsx'); %read in airfoil data table
-C_lalpha=(T{2,4}-T{1,4})/(T{2,3}-T{1,3}); %estimating lift-curve slope for wing (1/rad)
+C_lalpha=(T{2,4}-T{1,4}*(180/pi))/((T{2,3}-T{1,3})); %estimating lift-curve slope for wing (1/rad)
 kk=C_lalpha/(2*pi); %ratio between lift curve slope of wing and 2pi (ideal)
-alpha_ZL=-5*pi/180; %Cl of wing for 2-d airfoil at alpha=0 (rad)
+alpha_ZL=-5*pi/180; %alpha at zero lift (rad)
 C_l0=-T{1,4}*C_lalpha;% Cl0 of wing for 2-d airfoil (unitless)
 M=180/734.5; %mach number, vmax @10k (mph/mph)
 beta=(1-M^2)^0.5; %correction factor

@@ -1,4 +1,4 @@
-MAE 154A Preliminary Weight Calculations
+%MAE 154A Preliminary Weight Calculations
 
 %This script uses randomly generated parameters to determine designs that meet
 %our specs. It uses an xls (Excel) file known as 'Engine_Database.xlsx'
@@ -17,7 +17,7 @@ rho_sl = 23.77e-4; %Atmos. Density at sl [slugs/ft^3]
 
 %Import the engines spreadsheet, remember to sort by ascending power
 engines = xlsread('Engine_Database.xlsx');
-avionics = xlsread('Avionics_Weight_Budget.xlsx');
+avionics = xlsread('Avionics_Weight_Budget.xlsx'); %Other spreadsheets
 controls = xlsread('Control_Weight_Budget.xlsx');
 
 %Specs
@@ -131,8 +131,9 @@ while(i < max_iter)
     P_av_sl = P_ex + P_req_sl;  %Power required @ SL [hp]
     [P_engine_sl , I_sl] = min(P_av_sl); %Get max value and indice
     P_climb = P_engine_sl; %Power the engine needs to produce @ SL [hp]
-    v_climb = v_sl(I_sl);
+    v_climb = v_sl(I_sl); %Velocity of climb [fps]
     
+    %Calculate what the minimum power needed is
     if(max(P_req_sl) > max(P_req_10k) && max(P_req_sl) > P_climb)
         P_needed = max(P_req_sl)/eta_pr_loit;
     elseif(max(P_req_10k) > max(P_req_sl) && max(P_req_10k) > P_climb)
@@ -164,8 +165,8 @@ while(i < max_iter)
         if (W_tot <= W_max) %Checl to make sure its less than max weight
         design_num = design_num + 1;
         %If good, save the design in the struct array
-        Good_designs(design_num).weight = W_tot;
-        Good_designs(design_num).S_w = S_w;
+        Good_designs(design_num).weight = W_tot;  %Total weight [lbs]
+        Good_designs(design_num).S_w = S_w; %Wing Surface area [ft^2]
         Good_designs(design_num).b_w = b_w;  %Wingspan [ft]
         Good_designs(design_num).A = A;    %Aspect Ratio [-]
         Good_designs(design_num).e = e; %Rectangular wing efficiency [-]

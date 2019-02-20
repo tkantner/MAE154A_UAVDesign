@@ -202,9 +202,6 @@ while(i < max_iter)
         Weights(design_num).fuel_system = W_fuelsys; %Weight of the fuel system [lbs]
         Weights(design_num).control_system = W_contsys(1); %Weight of the control system [lbs]
         
-         W_tot = W_payload(1) + W_fuel + W_wing + W_fuse + W_htail + W_nacelle +...
-        W_vtail + W_eng_tot + W_fuelsys + W_contsys(1);  %Total aircraft weight [lbs]
-        
         %Break out
         break;
         end % if (W_tot <= W_max)

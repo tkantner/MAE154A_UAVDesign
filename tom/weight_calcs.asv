@@ -58,10 +58,10 @@ C_D0 = 0.040; %Parasitic drag coeff, typical value [-]
 
 outer_iter = 1; 
 for k = 1:outer_iter
-W_i = 20; %Initial Weight estimate [lbs]
+W_i = 50; %Initial Weight estimate [lbs]
 
 %Random design parameter guesses
-b_w = 2;  %Wingspan [ft]
+b_w = 3;  %Wingspan [ft]
 e = .7; %+ .3*rand; %Rectangular wing efficiency [-]
 lam_1_4 = 0; %Wing Quarter chord sweep [rad]
 lam = 1;   %Taper ratio [-]
@@ -71,11 +71,11 @@ N = 4;  %Ultimate load factor [-]
 L_fuse = 3; %Length of fuselage [ft]
 Wid_fuse = .5;  %Width of fuselage [ft]
 D_fuse = .5; %Depth of fuselage [ft]
-S_ht = .15; %Horizontal tail surface area [ft^2]
+S_ht = .5; %Horizontal tail surface area [ft^2]
 l_t = 1.5; %Distance from wing 1/4 MAC to tail 1/4 MAC [ft]
 b_h = .5; %Horizontal tail span [ft]
 t_HR = 1.5; %Horizontal tail max root thickness [in]
-S_vt = .4; %Vertical tail surface area [ft^2] 
+S_vt = .5; %Vertical tail surface area [ft^2] 
 b_v = .5; %Vertical tail span [ft]
 t_VR = 1.5; %Vertical tail max root thickness [in]
 

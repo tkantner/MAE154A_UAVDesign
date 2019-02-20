@@ -28,19 +28,19 @@ v_stall = 80; %Stall speed @ 10k [mph]
 v_stall = v_stall*5280/3600; %Stall speed @ 10k [mph]
 
 %Retrieve data from Spreadsheet
-designs = xlsread('Master_Valid_Designs.xlsx');
-[r, c] = size(designs); %Get size
+designs = xlsread('Valid_Designs.xlsx');
+
 
 %Design parameters
-W = designs(r - 1, 2);   %Median weight from spreadsheet [lbs]
-S_w = designs(r - 1, 3); %Median wing surface area from spreadsheet [ft^2]
-b_w = designs(r - 1, 4); %Median wingspan from spreadsheet [ft]
-A = designs(r - 1, 5);  %Median aspect ratio [-]
-e = designs(r - 1, 6);  %Median Oswald's eff [-]
-S_ht = designs(r - 1, 14); %Median Horizontal Tail Area [ft^2]
-l_t = designs(r - 1, 15); %Median l_t [ft]
+W = designs(1, 1);   %Median weight from spreadsheet [lbs]
+S_w = designs(1, 2); %Median wing surface area from spreadsheet [ft^2]
+b_w = designs(1, 3); %Median wingspan from spreadsheet [ft]
+A = designs(1, 4);  %Median aspect ratio [-]
+e = designs(1, 5);  %Median Oswald's eff [-]
+S_ht = designs(1, 13); %Median Horizontal Tail Area [ft^2]
+l_t = designs(1, 14); %Median l_t [ft]
 CD_0 = 0.03; %Parasitic Drag Coefficient [-]
-chord = 1;  %Chord length [ft]
+chord = S_w/b_w; %Chord Length [ft]
 
 %Calculations at SL
 v_sl = 75:1:v_max_sl; %Velocity vector [fps]

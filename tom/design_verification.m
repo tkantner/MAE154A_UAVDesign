@@ -49,7 +49,7 @@ b_v = params(18); %Vertical tail span [ft]
 t_VR = params(19); %Vertical tail max root thickness [in]
 P_engine = params(21); %Engine power [hp]
 P_engine = P_engine*550; %Engine power [ft-lbs/s]
-chord = S_w/b_2;  %Chord length [ft]
+chord = S_w/b_w;  %Chord length [ft]
 CL = 1.2;  %Coefficient of Lift [-]
 h_cg = 0;   %TO DO: Add correct value from other spreadsheet
 
@@ -63,7 +63,7 @@ v_10k = linspace(v_stall, v_max_10k);  %Velocity vector at 10k [fps]
 
 %Check Lift at stall
 L_10k = .5*rho_10k*v_stall^2*CL*S_w; %Lift force at stall [lbs]
-if(L_10k < W_i)
+if(L_10k > W_i) %If more lift than weight
     Validity.Lift = true; %Mark as valid
 else
     Validity.Lift = false; %Mark as invalid

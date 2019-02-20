@@ -55,15 +55,13 @@ thicc = params(8);  %Maximum thickness ratio (Last 2 digits of NACA) [-]
 C_L = 1.2;  %Coeff of lift [-]
 
 %Area parameters 
-A_fuselage = 70; %Max Frontal area of fuselage [in^2]
-A_wing = 72; %Max frontal area of wing [in^2]
-S_wet_fuse = 1091/4; %Fuselage wetted area [in^2] -> Update with correct area values
+S_wet_fuse = 380; %Fuselage wetted area [in^2] (As of 2/19)
 S_wet_fuse = S_wet_fuse/144; %Fuselage wetted area [ft^2]
-S_wet_wing = 491; %Wing Wetted area [in^2]
+S_wet_wing = 285; %Wing Wetted area [in^2] (As of 2/19)
 S_wet_wing = S_wet_wing/144; %Wing wetted area [ft^2]
-S_wet_ht = 500/2; %Horizontal tail wetted area [in^2] -> Update with correct area values
+S_wet_ht = 46.4; %Horizontal tail wetted area [in^2] (As of 2/19)
 S_wet_ht = S_wet_ht/144; %Fuselage wetted area [ft^2]
-S_wet_vt = 238/2;  %Vert tail wetted area [in^2]  -> Update with correct area values
+S_wet_vt = 120;  %Vert tail wetted area [in^2]  -> Update with correct area values (Guess)
 S_wet_vt = S_wet_vt/144;  %Vert tail wetted area [ft^2]
 
 chord = S_w/b_w; %Chord Length [ft]

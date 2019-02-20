@@ -16,7 +16,7 @@ rho_5k = .002048;   %Atoms. Density at 5k ft [slugs/ft^3]
 rho_sl = 23.77e-4; %Atmos. Density at sl [slugs/ft^3]
 
 %Import the engines spreadsheet, remember to sort by ascending power
-engines = xlsread('Engine_Database.xlsx');
+engines = xlsread('Engine_Database.xlsx', 'Gas Engines', '', 'basic');
 avionics = xlsread('Avionics_Weight_Budget.xlsx'); %Other spreadsheets
 controls = xlsread('Control_Weight_Budget.xlsx');
 
@@ -190,6 +190,21 @@ while(i < max_iter)
         Good_designs(design_num).Preq_W = P_needed/W_tot;  %Power Loading [hp/lb]
         Good_designs(design_num).P_needed = P_needed;  %Power actually require [hp]
         
+        %Save the weight breakdown as well
+        Weights(design_num).payload = W_payload(1);  %Weight of the payload [lbs]
+        Weights(design_num).fuel = W_fuel; %Weight of the fuel [lbs]
+        Weights(design_num).wing = W_wing; %Weight of the wing [lbs]
+        Weights(design_num).fuselage = W_fuse;  %Weight of the fuselage [lbs]
+        Weights(design_num).hor_tail = W_htail; %Weight of the horizontal tail [lbs]
+        Weights(design_num).nacelle = W_nacelle; %Weight of the nacelle [lbs]
+        Weights(design_num).ver_tail = W_vtail; %Weight of the vertical tail [lbs]
+        Weights(design_num).engine = W_eng_tot; %Total engine weight [lbs]
+        Weights(design_num).fuel_system = W_fuelsys; %Weight of the fuel system [lbs]
+        Weights(design_num).control_system = W_contsys(1); %Weight of the control system [lbs]
+        
+         W_tot = W_payload(1) + W_fuel + W_wing + W_fuse + W_htail + W_nacelle +...
+        W_vtail + W_eng_tot + W_fuelsys + W_contsys(1);  %Total aircraft weight [lbs]
+        
         %Break out
         break;
         end % if (W_tot <= W_max)
@@ -207,10 +222,17 @@ end %while
 
 end %for
 
+%If good, save to excel sheet
 if(design_num > 0)
     fprintf('%d Good Designs found\n', design_num);
+    
+    %Layout parameters
     xlswrite('Valid_Designs.xlsx',A);
     writetable(struct2table(Good_designs),'Valid_Designs.xlsx');
+    
+    %Weight breakdown
+    xlswrite('Weight_breakdown.xlsx',A);
+    writetable(struct2table(Weights),'Weight_breakdown.xlsx');
 else
     fprintf('No Designs Found!');
 end

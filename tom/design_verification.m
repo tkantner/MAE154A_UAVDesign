@@ -178,7 +178,10 @@ a_t = a_t*360/2/pi; %Tail lift-curve slope [deg^-1]
 alpha = 4*pi/180; %Angle of attack [rad] -> Fix
 
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
-epsilon_alpha = .15;  % Downwash efficiency loss [-] -> HOW TO CALCULATE THIS
+alpha_ZL=-5*pi/180;
+CL_w0=-alpha_ZL*a_w;
+epsilon_0=(2*CL_w0)/(pi*A); 
+epsilon_alpha =(2*a_w)/A; %.15;  % Downwash efficiency loss [-] -> HOW TO CALCULATE THIS
 M_acw = 0; %Moment about the AC, [ft-lbs] -> HOW TO CALCULATE THIS
 CM_acw_cruise = M_acw/(.5*rho_10k*v_cruise^2*S_w*chord); %Mom. Coeff about AC during cruise [-]
 CM_acw_loiter = M_acw/(.5*rho_10k*v_loit^2*S_w*chord); %Mom. Coeff about AC during cruise [-]
@@ -260,6 +263,10 @@ if(L_tot_stall > W_i) %If more lift than weight
 else
     Validity.Lift = false; %Mark as invalid
 end
+%----------------
+eta=1;
+Cm_0t=eta*VH*a_t*(epsilon_0-i_t);
+Cm_alphat=-eta*VH*a_t*(1-epsilon_alpha);
 
 %TODO
 %Update power calculations with correct curves and efficiencies

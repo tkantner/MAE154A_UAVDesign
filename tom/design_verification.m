@@ -27,7 +27,7 @@ v_max_sl = v_max_sl*5280/3600; %Max speed @ SL [fps]
 v_max_10k = 180;  %Max Speed @ 10k [mph]
 v_max_10k = v_max_10k*5280/3600; %Max speed @ 10k [fps]
 v_stall = 80; %Stall speed @ 10k [mph]
-v_stall = v_stall*5280/3600; %Stall speed @ 10k [mph]
+v_stall = v_stall*5280/3600; %Stall speed @ 10k [fps]
 W_max = 300;   %Max weight [lbs]
 W_payload = avionics(size(avionics)); %Weight of the payload [lbs]
 CD_0 = 0.04; %Estimate for now, refine later 
@@ -176,14 +176,38 @@ a_w = 1.50/10;  %Wing lift-curve slope [deg^-1]
 a_w = a_w*360/2/pi; %Wing lift-curve slope [rad^-1]
 a_t = 1.50/10; %Tail lift-curve slope [deg^-1]
 a_t = a_t*360/2/pi; %Tail lift-curve slope [deg^-1]
+%---------Airfoil----------------------%
+alpha_ZL=-4.35; %zero-lift AoA for NACA 4412 [deg]
+alpha_ZL=alpha_ZL*pi/180; %zero lift AoA for NACA 4412 [rad]
+cl_NACA1=0.4833; %two points on for airfoil cl curve in linear region
+cl_NACA2=0.5102;
+alpha_NACA1=0; %two points on airfoil cl curve in linear region, alpha [deg]
+alpha_NACA1=alpha_NACA1*pi/180; %two points on airfoil cl curve in linear region, alpha [rad]
+alpha_NACA2=0.2500; %two points on airfoil cl curve in linear region, alpha [deg]
+alpha_NACA2=alpha_NACA2*pi/180; %two points on cl curve in linear region, alpha [rad]
+Cl_alpha=(cl_NACA2-cl_NACA1)/(alpha_NACA2-alpha_NACA1); %2-D lift-curve slope [1/rad]
+Cl_0=cl_NACA1; %2-d lift-curve slope 
+a_stall=734.5; %speed of sound @ 10k feet [mph]
+a_stall=a_stall*5280/3600; %speed of sound @ 10k feet [fps]
+M_stall=v_stall/a_stall; %mach number, vstall @10k (mph/mph)
+beta_stall=(1-M_stall^2)^0.5; %correction factor
+kk=Cl_alpha/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
+CL_alpha=(2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall)^2+4)); %3-d lift-curve slope for wing (unitless)
+CL_0_HT=0; %3-d CL0 for tail (unitless)
+CL_0_tot=CL_0+(S_ht/S_w)*CL_0_HT; %3-d CL total for wing + tail (unitless)
+epsilon_0=(2*CL_w0)/(pi*A); 
+epsilon_alpha =(2*a_w)/(pi*A); %.15;  % Downwash efficiency loss [-] -> HOW TO CALCULATE THIS--based on elliptical lift dist. estimation
+CL_alpha_tot=CL_alpha+(S_ht/S_w)*CL_alpha*(1-epsilon_alpha); %3-D lift curve total slope for wing and tail (1/rad)
+alpha=(-5:10).*pi./180; %AoA [rad]
+CL_tot=CL_0_tot+CL_alpha_tot.*alpha; %3-D lift coefficient for wing and tail (unitless)
+alpha_stall=(CL_stall-CL_0_tot)/CL_alpha_tot; %AoA @ Vstall, 10k ft [rad]
 
+%------------------static stability------------%
 alpha = 4*pi/180; %Angle of attack [rad] -> Fix
 
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
-alpha_ZL=-5*pi/180;
+
 CL_w0=-alpha_ZL*a_w;
-epsilon_0=(2*CL_w0)/(pi*A); 
-epsilon_alpha =(2*a_w)/(pi*A); %.15;  % Downwash efficiency loss [-] -> HOW TO CALCULATE THIS--based on elliptical lift dist. estimation
 tau = 0.5; % Flap effectiveness factor (NEEDS TO BE UPDATED) [-]
 M_acw = 0; %Moment about the AC, [ft-lbs] -> HOW TO CALCULATE THIS
 CM_acw_cruise = M_acw/(.5*rho_10k*v_cruise^2*S_w*chord); %Mom. Coeff about AC during cruise [-]

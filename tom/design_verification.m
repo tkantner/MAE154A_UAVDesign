@@ -200,10 +200,13 @@ epsilon_alpha =(2*a_w)/(pi*A); %.15;  % Downwash efficiency loss [-] -> HOW TO C
 CL_alpha_tot=CL_alpha+(S_ht/S_w)*CL_alpha*(1-epsilon_alpha); %3-D lift curve total slope for wing and tail (1/rad)
 alpha=(-5:10).*pi./180; %AoA [rad]
 CL_tot=CL_0_tot+CL_alpha_tot.*alpha; %3-D lift coefficient for wing and tail (unitless)
+CL_loit=(2*W_tot)/(rho_10k*(v_loit^2)*S_w); %CL @ Vloit, 10k ft
+CL_cruise=CL_loit; %CL @ Vcruise, 10k ft
 alpha_stall=(CL_stall-CL_0_tot)/CL_alpha_tot; %AoA @ Vstall, 10k ft [rad]
+alpha_loit=(CL_loit-CL_0_tot)/(CL_alpha_tot); %AoA @ Vloit, 10k ft [rad]
 
 %------------------static stability------------%
-alpha = 4*pi/180; %Angle of attack [rad] -> Fix
+%alpha = 4*pi/180; %Angle of attack [rad] -> Fix
 
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
 

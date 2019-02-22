@@ -237,13 +237,24 @@ CM_0_loit = CM_acw_loit + V_H*a_t*i_t;
 CM_0_cr = CM_acw_cr + V_H*a_t*i_t;
 
 CL_alpha = a_w + a_t(S_t/S_w)*(1-epsilon_alpha);
+CM_alpha = CL_alpha*(h_cg - h_n);
 CL_0 = -a_t*(S_t/S_w)*i_t;
+
+CL_del_e = ?;  %Update these 
+CM_del_e = ?;
+
+CL_loit = W_i/(.5*rho_10k*v_loit^2*S_w); %Total lift coeff @ loiter [-]
+CL_cruise = W_i/(.5*rho_10k*v_cruise^2*S_w); %Total lift coeff @ cruise [-]
+
+delta_e_loit = -(CM_0_loit*CL_alpha + CM_alpha*CL_loit)/...
+    (CL_alpha*CM_del_e - CM_alpha*CL_del_e); %Elevator to trim [rad?]
 
 %------------------------------Lift Calculations--------------------------%
 
 %Check Lift at stall
 L_tot_stall = .5*rho_10k*v_stall^2*((a_w + a_t*(S_t/S_w)*...
     (1 - epsilon_alpha))*alpha - a_t*(S_t/S_w)*i_t); %Total Lift [lbs]
+CL_stall = W_i/(.5*rho_10k*v_stall^2*S_W);
 if(L_tot_stall > W_i) %If more lift than weight
     Validity.Lift = true; %Mark as valid
 else
@@ -255,8 +266,7 @@ end
 %Add stability calculations
 %    - Longitudinal Control
 %    - Directional Control
-%Elevator to Trim
-%Stick Free Neutral Point
-%More checks
+%More checks -> How do we show its stable?
+%MAKE SURE VELOCITIES AND ALPHAS MATCH SO WE CAN TRIM
 %Add outer loop
 %Good design validation + Saving to Excel

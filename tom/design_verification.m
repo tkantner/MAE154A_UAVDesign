@@ -57,11 +57,11 @@ C_m = S_w/b_w; %Mean aerodynamic chord
 
 %Cruise Conditions - On our way to the fire
 eta_pr_cruise = 0.85;  %Cruise Propulsive efficiency [-]
-c_p_cruise = 0.7;   %Cruise Propeller efficiency [lbs/hp/hr]
+c_p_cruise = 0.7;   %Sp. Fuel Consumption [lbs/hp/hr]
 
 %Loiter conditions
 eta_pr_loit = 0.7;   %Loiter Propulsive efficiency [-]
-c_p_loit = 0.5;   %Loiter propeller efficiency [lbs/hp/hr]
+c_p_loit = 0.5;   %Sp. Fuel Consumption [lbs/hp/hr]
 
 %Takeoff and Landing Fractions
 W_fuel_to_frac = 0.998;  %Takeoff fuel weight fraction [-]
@@ -73,14 +73,15 @@ W_fuel_land_frac = 0.995;  %Landing fuel weight fraction [-]
 
 k = 0;
 max_iter = 50;
+W_thresh = 0.1; %Weight threshold for convergence [lbs]
 while(k < max_iter)
     %Drag calculations
     K = 1/(pi*A*e);
     v_sl = linspace(50,v_max_sl); % Velocity vector at sea level [fps]
     v_10k = linspace(v_stall, v_max_10k);  %Velocity vector at 10k [fps]
     
-    D_para_sl = .5*rho_sl*v_sl.^2*S_w.*CD0; %Parasitic drag sl [lbf]
-    D_para_10k = .5*rho_10k*v_10k.^2*S_w.*CD0; %Parasitic drag at 10k ft [lbf]
+    D_para_sl = .5*rho_sl*v_sl.^2*S_w.*CD_0; %Parasitic drag sl [lbf]
+    D_para_10k = .5*rho_10k*v_10k.^2*S_w.*CD_0; %Parasitic drag at 10k ft [lbf]
 
     D_i_sl = 2*K*W_i^2./(rho_sl*v_sl.^2*S_w); %Induced Drag sl [lbf]
     D_i_10k = 2*K*W_i^2./(rho_10k*v_10k.^2*S_w); %Induced drag at 10k ft[lbf]
@@ -112,10 +113,10 @@ while(k < max_iter)
     P_ex = RC*W_i; %Excess power [ft*lbs/s]
     P_ex = P_ex/550; %Excess power [hp]
     
-    P_req_10k = D_10k.*v_10k; %Power required @ 10k [ft*lbs/s]
+    P_req_10k = D_tot_10k.*v_10k; %Power required @ 10k [ft*lbs/s]
     P_req_10k = P_req_10k/550;  %Power required @ 10k[hp]
     
-    P_req_sl = D_sl.*v_sl; %Power required @ SL [ft*lbs/s]
+    P_req_sl = D_tot_sl.*v_sl; %Power required @ SL [ft*lbs/s]
     P_req_sl = P_req_sl/550;  %Power required @ SL [hp]
     P_av_sl = P_ex + P_req_sl;  %Power required @ SL [hp]
     [P_engine_sl , I_sl] = min(P_av_sl); %Get max value and indice
@@ -167,27 +168,29 @@ end %while
 
 %-----------------------------CG/NP/SM Calculations-----------------------%
 
+CL_stall = W_i/(.5*rho_10k*v_stall^2*S_w); %CL at Stall condition [-]
+CL
+
 %Lift curve slopes are from Cl vs. Alpha graphs for 4412
 a_w = 1.50/10;  %Wing lift-curve slope [deg^-1]
 a_w = a_w*360/2/pi; %Wing lift-curve slope [rad^-1]
 a_t = 1.50/10; %Tail lift-curve slope [deg^-1]
 a_t = a_t*360/2/pi; %Tail lift-curve slope [deg^-1]
 
-%alpha = linspace(0, 10, 10); %Angle of Attack Vector [deg]
-%alpha = alpha*pi/180; %Angle of Attack Vector [rad]
 alpha = 4*pi/180; %Angle of attack [rad] -> Fix
 
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
 alpha_ZL=-5*pi/180;
 CL_w0=-alpha_ZL*a_w;
 epsilon_0=(2*CL_w0)/(pi*A); 
-epsilon_alpha =(2*a_w)/A; %.15;  % Downwash efficiency loss [-] -> HOW TO CALCULATE THIS--based on elliptical lift dist. estimation
+epsilon_alpha =(2*a_w)/(pi*A); %.15;  % Downwash efficiency loss [-] -> HOW TO CALCULATE THIS--based on elliptical lift dist. estimation
+tau = 0.5; % Flap effectiveness factor (NEEDS TO BE UPDATED) [-]
 M_acw = 0; %Moment about the AC, [ft-lbs] -> HOW TO CALCULATE THIS
 CM_acw_cruise = M_acw/(.5*rho_10k*v_cruise^2*S_w*chord); %Mom. Coeff about AC during cruise [-]
 CM_acw_loiter = M_acw/(.5*rho_10k*v_loit^2*S_w*chord); %Mom. Coeff about AC during cruise [-]
 
 V_H = l_t*S_ht/(chord*S_w); %Tail volume ratio [-]
-h_act = l_t/chord + h_cg_i; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
+%h_act = l_t/chord + h_cg_i; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
 
 %Declare symbols
 syms h_cg_sym_cr;
@@ -196,9 +199,9 @@ syms h_cg_sym_loit;
 h_n = h_acw + V_H*(a_t/a_w)*(1-epsilon_alpha); %Neutral point [-]
 
 %Solve for centers of gravity, wrt wing leading edge, prop to chord [-]
-eq_cr = a_w*((h_cg_sym - h_acw) - V_H*(a_t/a_w)*(1-epsilon_alpha))*alpha...
+eq_cr = a_w*((h_cg_sym_cr - h_acw) - V_H*(a_t/a_w)*(1-epsilon_alpha))*alpha...
     + CM_acw_cruise + V_H*a_t*i_t; %At cruise
-eq_loit = a_w*((h_cg_sym - h_acw) - V_H*(a_t/a_w)*(1-epsilon_alpha))*alpha...
+eq_loit = a_w*((h_cg_sym_loit - h_acw) - V_H*(a_t/a_w)*(1-epsilon_alpha))*alpha...
     + CM_acw_cruise + V_H*a_t*i_t; %At loiter
 
 h_cg_solution_set_cr = vpa(solve(eq_cr == 0, h_cg_sym_cr)); %Define solution
@@ -243,8 +246,8 @@ CL_alpha = a_w + a_t(S_t/S_w)*(1-epsilon_alpha);
 CM_alpha = CL_alpha*(h_cg - h_n);
 CL_0 = -a_t*(S_t/S_w)*i_t;
 
-CL_del_e = ?;  %Update these 
-CM_del_e = ?;
+CL_del_e = tau*a_t*(S_t/S_w); 
+CM_del_e = -tau*V_H*a_t;
 
 CL_loit = W_i/(.5*rho_10k*v_loit^2*S_w); %Total lift coeff @ loiter [-]
 CL_cruise = W_i/(.5*rho_10k*v_cruise^2*S_w); %Total lift coeff @ cruise [-]
@@ -263,11 +266,14 @@ if(L_tot_stall > W_i) %If more lift than weight
 else
     Validity.Lift = false; %Mark as invalid
 end
-%----------------MOMENT COEFFICIENT INDIVIDUAL COMPONENTS--------%
+%----------------MOMENT COEFFICIENT INDIVIDUAL COMPONENTS-----------------%
+
 eta=1; %ratio of dynamic pressure at tail/dynamic pressure at wing
 Cm_0t=eta*VH*a_t*(epsilon_0-i_t); %zero AoA moment contribution from tail
 Cm_alphat=-eta*VH*a_t*(1-epsilon_alpha); %change in AoA moment contribution from tail [1/rad]
-%----FUSELAGE SECTIONS----%
+
+%-------------------------FUSELAGE SECTIONS-------------------------------%
+
 %perimeters 1-6 represent mid-point perimeter of sectioned fuselage starting from nose
 perimeter_1=18.89; % mid-section perimeters [in]
 perimeter_2=27.87;

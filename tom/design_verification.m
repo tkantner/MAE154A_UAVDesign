@@ -181,7 +181,7 @@ h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
 alpha_ZL=-5*pi/180;
 CL_w0=-alpha_ZL*a_w;
 epsilon_0=(2*CL_w0)/(pi*A); 
-epsilon_alpha =(2*a_w)/A; %.15;  % Downwash efficiency loss [-] -> HOW TO CALCULATE THIS
+epsilon_alpha =(2*a_w)/A; %.15;  % Downwash efficiency loss [-] -> HOW TO CALCULATE THIS--based on elliptical lift dist. estimation
 M_acw = 0; %Moment about the AC, [ft-lbs] -> HOW TO CALCULATE THIS
 CM_acw_cruise = M_acw/(.5*rho_10k*v_cruise^2*S_w*chord); %Mom. Coeff about AC during cruise [-]
 CM_acw_loiter = M_acw/(.5*rho_10k*v_loit^2*S_w*chord); %Mom. Coeff about AC during cruise [-]
@@ -263,11 +263,44 @@ if(L_tot_stall > W_i) %If more lift than weight
 else
     Validity.Lift = false; %Mark as invalid
 end
-%----------------
-eta=1;
-Cm_0t=eta*VH*a_t*(epsilon_0-i_t);
-Cm_alphat=-eta*VH*a_t*(1-epsilon_alpha);
+%----------------MOMENT COEFFICIENT INDIVIDUAL COMPONENTS--------%
+eta=1; %ratio of dynamic pressure at tail/dynamic pressure at wing
+Cm_0t=eta*VH*a_t*(epsilon_0-i_t); %zero AoA moment contribution from tail
+Cm_alphat=-eta*VH*a_t*(1-epsilon_alpha); %change in AoA moment contribution from tail [1/rad]
+%----FUSELAGE SECTIONS----%
+%perimeters 1-6 represent mid-point perimeter of sectioned fuselage starting from nose
+perimeter_1=18.89; % mid-section perimeters [in]
+perimeter_2=27.87;
+perimeter_5=25.15;
+perimeter_6=38.72-10.31*1.08;
+wf_1=perimeter_1/(pi); %estimation of average width of each section [in]
+wf_2=perimeter_2/pi;
+wf_5=25.15/pi;
+wf_6=perimeter_6/pi;
+wf_6p=wf_6+0.5*10.31*1.08;
+dx1=4.16; %length of each section, 1-6 (NEEDS TO BE UPDATED) [in]
+dx2=4;
+dx3=4;
+dx4=4;
+dx5=4;
+dx6=4;
 
+xi5=2; %distance from fuselage mid-section 5 to wing T.E. (NEEDS TO BE UPDATED) [in]
+xi6=6; %distance from fuselage mid-section 6 to wing T.E. (NEEDS TO BE UPDATED) [in]
+eps_u1=1.3; %graphically determined upwash for sections 1&2 [1/rad]
+eps_u2=1.5; %graphically determined upwash for sections 1&2 [1/rad]
+eps_u3=0; %sections 3&4 are approximated to have no upwash or downwash [1/rad]
+eps_u4=0;
+eps_u5=(xi5/11.21)*(1-epsilon_alpha); %assumed linear progression in downwash from T.E to tail; estimation of downwash based 
+                                      %on linear model
+eps_u6=(xi6/11.21)*(1-epsilon_alpha);
+
+Cm_alphaf=1/(36.5*S_w*144*11.21)*((wf_1^2)*eps_u1*dx1+(wf_2^2)...
+    *eps_u2*dx2+(wf_5^2)*eps_u5*dx5+(wf_6^6)*eps_u6*dx6); %estimation of contribution of fuselage to moment coeff from change in AoA [1/rad]
+k2_k1=0.6; %graphically determined coefficient to determine zero AoA fuselage contribution to moment
+Cm_0f=((k2_k1)/(36.5*S_w*144*11.21))*((wf_1^2)*dx1+(wf_2^2)...
+    *dx2+(wf_3^2)*dx3+(wf_4^2)*dx4+(wf_5^2)*dx5+(wf_6^2)*wf_6)*alpha_ZL; %estimation of contribution of fuselage to moment coeff at zero AoA [1/rad]
+    
 %TODO
 %Update power calculations with correct curves and efficiencies
 %Add stability calculations

@@ -33,6 +33,19 @@ W_max = 300;   %Max weight [lbs]
 W_payload = avionics(size(avionics)); %Weight of the payload [lbs]
 CD_0 = 0.04; %Estimate for now, refine later 
 
+%Cruise Conditions - On our way to the fire
+eta_p_cruise = 0.85;  %Cruise Propulsive efficiency [-]
+c_p_cruise_bhp = 0.7;   %Sp. Fuel Consumption [lbs/hp/hr] -> How to determine this
+
+%Loiter conditions
+eta_p_loit = 0.85;   %Loiter Propulsive efficiency [-]
+c_p_loit_bhp = 0.5;   %Sp. Fuel Consumption [lbs/hp/hr] -> How to determine this
+
+%Takeoff, Climb, and Landing Fractions - Raymer
+W_fuel_to_frac = 0.970;  %Takeoff fuel weight fraction [-]
+W_fuel_climb_frac = 0.985; %Climb fuel weight fraction [-]
+W_fuel_land_frac = 0.995;  %Landing fuel weight fraction [-]
+
 %Number of Good and Bad Designs
 n_good = 0;
 n_bad = 0;
@@ -40,7 +53,7 @@ n_bad = 0;
 %Randomly generate designs
 for n = 1:100
 
-%Assign parameters in array to values
+%Randomly Generate a Design
 W_i = 20; %Initial Weight guess [lbs]
 S_w = 1 + rand*3;  %Wing Surface Area [ft^2]
 b_w = 2 + rand*4;  %Wingspan [ft]
@@ -63,20 +76,6 @@ i_t = i_t*pi/180; %Tail Incidence angle [rad]
 chord_f = .1 + .9*rand; %Flap chord Length [ft]
 A = b_w^2/S_w; % Aspect Ratio [-]
 C_m = S_w/b_w; %Mean aerodynamic chord [ft]
-
-%Cruise Conditions - On our way to the fire
-eta_pr_cruise = 0.85;  %Cruise Propulsive efficiency [-]
-c_p_cruise = 0.7;   %Sp. Fuel Consumption [lbs/hp/hr] -> How to determine this
-
-%Loiter conditions
-eta_pr_loit = 0.85;   %Loiter Propulsive efficiency [-]
-c_p_loit = 0.5;   %Sp. Fuel Consumption [lbs/hp/hr] -> How to determine this
-
-%Takeoff and Landing Fractions
-W_fuel_to_frac = 0.998;  %Takeoff fuel weight fraction [-]
-W_fuel_climb_frac = 0.99; %Climb fuel weight fraction [-]
-W_fuel_desc_frac = 0.995;  %Descent fuel weight fraction [-]
-W_fuel_land_frac = 0.995;  %Landing fuel weight fraction [-]
 
 %---------------------------Weight Calculations --------------------------%
 
@@ -106,14 +105,14 @@ while(k < max_iter)
     [L_D_cr, i_cr] = max(W_i./D_tot_10k); %Get max L/D and indice of cruise [-]
     v_cruise = v_10k(i_cr); %Cruise velocity [fps]
     
-    %Fuel Calculations
-    W_fuel_cruise_frac = 1/(exp(R_cruise*c_p_cruise*...
-        (375*eta_pr_cruise*L_D_cr)^-1));  %Fuel-Weight fraction used in cruise [-]
-    W_fuel_loit_frac = 1/(exp((endur*v_loit)/...
-        (375*eta_pr_loit/c_p_loit*L_D_loit)));   %Fuel-Weight fraction used in loiter [-]
-    Misn_fuel_frac = W_fuel_to_frac * W_fuel_climb_frac * W_fuel_cruise_frac *...
-        W_fuel_loit_frac * W_fuel_desc_frac * W_fuel_land_frac; %Total fuel-weight fraction [-]
-    W_fuel = (1-Misn_fuel_frac)*W_i; %Total weight of fuel used [lbs]
+    %Fuel Calculations - Raymner
+    c_p_cruise = c_p_cruise_bhp*v_cruise/(550*eta_p_cruise); %Convert units and add vel [-]
+    W_fuel_cruise_frac = exp(-(R_cruise/2)*c_p_cruise/(L_D_cr*v_cruise)); %Crusing fraction [-]
+    c_p_loit = c_p_loit_bhp*v_cruise/(550*eta_p_loit); %Convert units and add vel [-]
+    W_fuel_loit_frac = exp(-endur*c_p_loit/L_D_loit);  %Fuel-Weight fraction used in loiter [-]
+    Misn_fuel_frac = W_fuel_to_frac * W_fuel_climb_frac * W_fuel_cruise_frac^2 *...
+        W_fuel_loit_frac * W_fuel_land_frac; %Total fuel-weight fraction [-]
+    W_fuel = (1-Misn_fuel_frac)*W_i*1.05; %Total weight of fuel req + 5% [lbs]
     
     %Structure Weight Calculations (Cessna Eqs)
     B = W_i*N*S_w*(1.9*A - 4)/(1 + .11*thicc);
@@ -138,11 +137,11 @@ while(k < max_iter)
     
     %Calculate what the minimum power needed is
     if(max(P_req_sl) > max(P_req_10k) && max(P_req_sl) > P_climb)
-        P_needed = max(P_req_sl)/eta_pr_loit;
+        P_needed = max(P_req_sl)/eta_p_loit;
     elseif(max(P_req_10k) > max(P_req_sl) && max(P_req_10k) > P_climb)
-            P_needed = max(P_req_10k)/eta_pr_loit;
+            P_needed = max(P_req_10k)/eta_p_loit;
     else
-        P_needed = P_climb/eta_pr_loit;
+        P_needed = P_climb/eta_p_loit;
     end
     
     %Get the index of the engine that we can use
@@ -331,11 +330,11 @@ end
 
 %TODO: ADD TAKE OFF/CLIMB FUEL CONSUMPTION
 Wf_cr_1 = W_i*(1/exp(R_cruise*c_p_cruise...
-    /(eta_pr_cruise*L_D_cr))); %Fuel after cruise to fire [lbs]
+    /(eta_p_cruise*L_D_cr))); %Fuel after cruise to fire [lbs]
 Wf_loit = ((1/Wf_cr_1) + endur*c_p_loit/...
-    (eta_pr_loit*L32_D_loit*sqrt(2*rho_10k*S_w)))^-2; %Fuel after loiter [lbs]
+    (eta_p_loit*L32_D_loit*sqrt(2*rho_10k*S_w)))^-2; %Fuel after loiter [lbs]
 Wf_cr_2 = Wf_loit*(1/exp(R_cruise*c_p_cruise...
-    /(eta_pr_cruise*L_D_cr))); %Fuel after cruise from fire [lbs]
+    /(eta_p_cruise*L_D_cr))); %Fuel after cruise from fire [lbs]
 %TODO: ADD LANDING FUEL CONSUMPTION
 
 %Check to see if we have enough fuel
@@ -422,6 +421,13 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).w_engine = W_eng_tot; %Total engine weight [lbs]
     Good_designs(n_good).w_fuel_system = W_fuelsys; %Weight of the fuel system [lbs]
     Good_designs(n_good).w_control_system = W_contsys(1); %Weight of the control system [lbs]
+    
+    %Mission stuff
+    Good_designs.(n_good).v_cruise = v_cruise;
+    Good_designs.(n_good).v_loit = v_loit;
+    Good_designs.(n_good).v_climb = v_climb;
+    Good_designs.(n_good).L_D_loit = L_D_loit;
+    Good_designs.(n_good).L_D_cr= L_D_cr;
     
     %Airfoil Stuff
     Good_designs(n_good).CL_tot = CL_tot; %3-D lift coefficient for wing and tail [-]
@@ -524,6 +530,13 @@ else
     Bad_designs(n_bad).alpha_loit = alpha_loit; %AoA @ Vloit, 10k ft [rad]
     Bad_designs(n_bad).alpha_cr = alpha_cr; %AoA @ Vcruise, 10k ft [rad]
     
+    %Mission stuff
+    Bad_designs.(n_bad).v_cruise = v_cruise;
+    Bad_designs.(n_bad).v_loit = v_loit;
+    Bad_designs.(n_bad).v_climb = v_climb;
+    Bad_designs.(n_bad).L_D_loit = L_D_loit;
+    Bad_designs.(n_bad).L_D_cr= L_D_cr;
+    
     %CG Stuff
     Bad_designs(n_bad).tau = tau; % Flap effectiveness factor [-]
     Bad_designs(n_bad).M_acw = M_acw; %Moment about the AC, [ft-lbs] -> HOW TO CALCULATE THIS
@@ -591,8 +604,6 @@ if(n_bad)
 end
 fprintf('Done!\n');
 
-
-%
 %-------------------------FUSELAGE SECTIONS-------------------------------%
 
 %perimeters 1-6 represent mid-point perimeter of sectioned fuselage starting from nose
@@ -631,10 +642,11 @@ Cm_0f=((k2_k1)/(36.5*S_w*144*11.21))*((wf_1^2)*dx1+(wf_2^2)...
 %TODO
 %How do we update the TSFC -> What is it initially and how does it
 % change with velocity?
+%Why are we having issues with total lift?
 %Add stability calculations
 %    - Longitudinal Control
 %    - Directional Control
 %More checks -> How do we show its stable?
-%Takeoff, climb, landing fuel consumption
+%Takeoff, climb, landing fuel consumption?
 %Finish labeling everything and cleaning up code
 %TRIPLE CHECK LITERALLY EVERYTHING

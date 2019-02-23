@@ -296,6 +296,8 @@ delta_e_loit = -(CM_0_loit*CL_alpha + CM_alpha_loit*CL_loit)/...
     (CL_alpha*CM_del_e - CM_alpha_loit*CL_del_e); %Elevator to trim [rad?]
 delta_e_cr = -(CM_0_cr*CL_alpha + CM_alpha_cr*CL_cr)/...
     (CL_alpha*CM_del_e - CM_alpha_cr*CL_del_e); %Elevator to trim [rad?]
+CL_q=2*eta*V_H*CL_alpha*(1-epsilon_alpha); %lift coefficient due to pitch rate
+CM_q=-(l_t/chord)*CL_q; %moment coefficient due to pitch rate
 
 %------------------------------Lift Calculations--------------------------%
 

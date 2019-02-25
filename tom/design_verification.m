@@ -18,7 +18,7 @@ rho_10k = 17.56e-4; %Atmos. Density at 10k ft [slugs/ft^3]
 rho_sl = 23.77e-4; %Atmos. Density at sl [slugs/ft^3]
 
 %Mission Specs -> used to verify design
-endur = 2; %Endurance [hrs]
+endur = 3; %Endurance [hrs]
 RC = 1500;  %Rate of Climb [fpm]
 RC = RC/60; %Rate of Climb [fps]
 R_cruise = 60; %Cruising 
@@ -56,7 +56,7 @@ for n = 1:100
 %Randomly Generate a Design
 W_i = 20; %Initial Weight guess [lbs]
 S_w = 1 + rand*3;  %Wing Surface Area [ft^2]
-b_w = 2 + rand*4;  %Wingspan [ft]
+b_w = 2 + rand*10;  %Wingspan [ft]
 e = 0.7; %Rectangular wing efficiency [-]
 lam_1_4 = 0; %Wing Quarter chord sweep [rad]
 lam = 1;   %Taper ratio [-]
@@ -77,12 +77,17 @@ chord_f = .1 + .9*rand; %Flap chord Length [ft]
 A = b_w^2/S_w; % Aspect Ratio [-]
 C_m = S_w/b_w; %Mean aerodynamic chord [ft]
 
+    if A<=4
+        continue;
+    end
+
 %---------------------------Weight Calculations --------------------------%
 
 k = 0;
 max_iter = 50;
 W_thresh = 0.1; %Weight threshold for convergence [lbs]
 while(k < max_iter)
+
     %Drag calculations
     K = 1/(pi*A*e);
     v_sl = linspace(50,v_max_sl); % Velocity vector at sea level [fps]
@@ -106,10 +111,10 @@ while(k < max_iter)
     v_cruise = v_10k(i_cr); %Cruise velocity [fps]
     
     %Fuel Calculations - Raymner
-    c_p_cruise = c_p_cruise_bhp*v_cruise/(550*eta_p_cruise); %Convert units and add vel [-]
-    W_fuel_cruise_frac = exp(-(R_cruise/2)*c_p_cruise/(L_D_cr*v_cruise)); %Crusing fraction [-]
-    c_p_loit = c_p_loit_bhp*v_cruise/(550*eta_p_loit); %Convert units and add vel [-]
-    W_fuel_loit_frac = exp(-endur*c_p_loit/L_D_loit);  %Fuel-Weight fraction used in loiter [-]
+    c_p_cruise = c_p_cruise_bhp*v_cruise/(3600*550*eta_p_cruise); %Convert units and add vel [-]
+    W_fuel_cruise_frac = exp(-((5280*R_cruise/2))*c_p_cruise/(L_D_cr*v_cruise)); %Crusing fraction [-]
+    c_p_loit = c_p_loit_bhp*v_cruise/(3600*550*eta_p_loit); %Convert units and add vel [-]
+    W_fuel_loit_frac = exp(-endur*3600*c_p_loit/L_D_loit);  %Fuel-Weight fraction used in loiter [-]
     Misn_fuel_frac = W_fuel_to_frac * W_fuel_climb_frac * W_fuel_cruise_frac^2 *...
         W_fuel_loit_frac * W_fuel_land_frac; %Total fuel-weight fraction [-]
     W_fuel = (1-Misn_fuel_frac)*W_i*1.05; %Total weight of fuel req + 5% [lbs]
@@ -182,7 +187,7 @@ end %while
 %-----------------------------Airfoil-------------------------------------%
 
 %Lift curve slopes are from Cl vs. Alpha graphs for 4412
-a_w = 1.50/10;  %Wing lift-curve slope [deg^-1]
+a_w = 1.50/10;  %2-D Wing lift-curve slope [deg^-1]
 a_w = a_w*360/2/pi; %Wing lift-curve slope [rad^-1]
 a_t = 1.50/10; %Tail lift-curve slope [deg^-1]
 a_t = a_t*360/2/pi; %Tail lift-curve slope [deg^-1]
@@ -222,7 +227,8 @@ CL_cruise = (2*W_tot)/(rho_10k*(v_cruise^2)*S_w);
 alpha_stall = (CL_stall-CL_0_tot)/CL_alpha_tot; %AoA @ Vstall, 10k ft [rad]
 alpha_loit = (CL_loit-CL_0_tot)/(CL_alpha_tot); %AoA @ Vloit, 10k ft [rad]
 alpha_cr = (CL_cruise - CL_0_tot)/CL_alpha_tot; %AoA @ Vcruise, 10k ft [rad]
-
+a_w=CL_alpha; %3-D lift-curve slope, wing [1/rad]
+a_t=CL_alpha*(1-epsilon_alpha); %3-D lift-curve slope, tail [1/rad]
 %-----------------------------CG/NP/SM Calculations-----------------------%
 
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
@@ -318,7 +324,7 @@ CM_q = -(l_t/chord)*CL_q; %moment coefficient due to pitch rate
 
 %Check Lift at stall
 L_tot_stall = .5*rho_10k*v_stall^2*((a_w + a_t*(S_ht/S_w)*...
-    (1 - epsilon_alpha))*alpha_stall - a_t*(S_ht/S_w)*i_t); %Total Lift [lbs]
+    (1 - epsilon_alpha))*alpha_stall + a_t*(S_ht/S_w)*i_t); %Total Lift [lbs]
 
 if(L_tot_stall >= W_i) %If more lift than weight
     Validity.Lift = true; %Mark as valid

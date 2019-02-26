@@ -1,4 +1,3 @@
-%Thomas Kantner
 %MAE 154A UAV Design Verification
 
 %This master script takes the design layout input parameters (size,
@@ -15,13 +14,15 @@ controls = xlsread('Control_Weight_Budget.xlsx');
 
 %Physical constants
 rho_10k = 17.56e-4; %Atmos. Density at 10k ft [slugs/ft^3]
+rho_5k = .002048;   %Atoms. Density at 5k ft [slugs/ft^3]
 rho_sl = 23.77e-4; %Atmos. Density at sl [slugs/ft^3]
 
 %Mission Specs -> used to verify design
-endur = 3; %Endurance [hrs]
+endur = 2; %Endurance [hrs]
 RC = 1500;  %Rate of Climb [fpm]
 RC = RC/60; %Rate of Climb [fps]
 R_cruise = 60; %Cruising 
+h_to = 315; %Take off altitude [ft]
 ceil = 10000; %Ceiling [ft]
 v_max_sl = 150;  %Max Speed @ SL [mph]
 v_max_sl = v_max_sl*5280/3600; %Max speed @ SL [fps]
@@ -33,18 +34,12 @@ W_max = 300;   %Max weight [lbs]
 W_payload = avionics(size(avionics)); %Weight of the payload [lbs]
 CD_0 = 0.04; %Estimate for now, refine later 
 
+%Climb conditions
+eta_p_climb = 0.85; %Climb prop .eff [-]
 %Cruise Conditions - On our way to the fire
 eta_p_cruise = 0.85;  %Cruise Propulsive efficiency [-]
-c_p_cruise_bhp = 0.7;   %Sp. Fuel Consumption [lbs/hp/hr] -> How to determine this
-
 %Loiter conditions
 eta_p_loit = 0.85;   %Loiter Propulsive efficiency [-]
-c_p_loit_bhp = 0.5;   %Sp. Fuel Consumption [lbs/hp/hr] -> How to determine this
-
-%Takeoff, Climb, and Landing Fractions - Raymer
-W_fuel_to_frac = 0.970;  %Takeoff fuel weight fraction [-]
-W_fuel_climb_frac = 0.985; %Climb fuel weight fraction [-]
-W_fuel_land_frac = 0.995;  %Landing fuel weight fraction [-]
 
 %Number of Good and Bad Designs
 n_good = 0;
@@ -56,30 +51,42 @@ for n = 1:100
 %Randomly Generate a Design
 W_i = 20; %Initial Weight guess [lbs]
 S_w = 1 + rand*3;  %Wing Surface Area [ft^2]
-b_w = 2 + rand*10;  %Wingspan [ft]
+b_w = 2 + rand*4;  %Wingspan [ft]
 e = 0.7; %Rectangular wing efficiency [-]
 lam_1_4 = 0; %Wing Quarter chord sweep [rad]
 lam = 1;   %Taper ratio [-]
 thicc = .12; %Max chord thickness ratio [-]
 N = 4;  %Ultimate load factor (fixed) [-]
-L_fuse = 2.5 + rand*2; %Length of fuselage [ft]
+L_fuse = 1.5 + rand*1.5; %Length of fuselage [ft]
 Wid_fuse = .5 + rand*.5;  %Width of fuselage [ft]
 D_fuse = .5 + rand*.5; %Depth of fuselage [ft]
 S_ht = .5 + rand*.5; %Horizontal tail surface area [ft^2]
-l_t = 1.5 + rand*1.5; %Distance from wing 1/4 MAC to tail 1/4 MAC [ft]
+l_t = 1.5 + rand*1; %Distance from wing 1/4 MAC to tail 1/4 MAC [ft]
 b_h = .5 + rand*.5; %Horizontal tail span [ft]
 S_vt = .5 + rand*.5; %Vertical tail surface area [ft^2] 
 b_v = .5 + rand*.5; %Vertical tail span [ft]
-chord = S_w/b_w;  %Chord length [ft]
-i_t = rand*4;  %Tail Incidence Angle [deg]
-i_t = i_t*pi/180; %Tail Incidence angle [rad]
+chord_w = S_w/b_w;  %Wing Chord length [ft]
+chord_ht = S_ht/b_h; %Hor. Tail Chord [ft]
+l_wing = 1 + 1*rand; %Location of wing center from nose [ft]
+l_fueltank = 1 + 1*rand; %Location of fuel tank center from nose [ft]
+l_avionics = .25 + .5*rand; %Location of avionics center from nose [ft]
 chord_f = .1 + .9*rand; %Flap chord Length [ft]
 A = b_w^2/S_w; % Aspect Ratio [-]
 C_m = S_w/b_w; %Mean aerodynamic chord [ft]
 
-    if A<=4
-        continue;
-    end
+%We want a higher aspect ratio
+if (A <= 4)
+    continue;
+end
+
+%Physically impossible setups
+if(l_fueltank >= (L_fuse - .333)) %Fuel tank has finite dimensions
+    continue;
+end
+
+if(chord_f > chord_w) %Flap chord can't be bigger than wing chord
+    continue;
+end
 
 %---------------------------Weight Calculations --------------------------%
 
@@ -103,21 +110,12 @@ while(k < max_iter)
     D_tot_10k = D_para_10k + D_i_10k; %Total drag at 10k ft [lbf]
     
     %Find Best ratios for loiter and cruise
-    [L32_D_loit, i_loit] = max((W_i./(.5*rho_10k.*v_10k.^2*S_w))...
-        .^(3/2)./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w))); %Get max L^(3/2)/D and indice of loiter [-]
+    [CL32_CD_loit, i_loit] = max((W_i./(.5*rho_10k.*v_10k.^2*S_w))...
+        .^(3/2)./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w))); %Get max CL^(3/2)/CD and indice of loiter [-]
     L_D_loit = W_i/D_tot_10k(i_loit); %Get L/D at loiter [-]
     v_loit = v_10k(i_loit); %Loiter velocity [fps]
     [L_D_cr, i_cr] = max(W_i./D_tot_10k); %Get max L/D and indice of cruise [-]
     v_cruise = v_10k(i_cr); %Cruise velocity [fps]
-    
-    %Fuel Calculations - Raymner
-    c_p_cruise = c_p_cruise_bhp*v_cruise/(3600*550*eta_p_cruise); %Convert units and add vel [-]
-    W_fuel_cruise_frac = exp(-((5280*R_cruise/2))*c_p_cruise/(L_D_cr*v_cruise)); %Crusing fraction [-]
-    c_p_loit = c_p_loit_bhp*v_cruise/(3600*550*eta_p_loit); %Convert units and add vel [-]
-    W_fuel_loit_frac = exp(-endur*3600*c_p_loit/L_D_loit);  %Fuel-Weight fraction used in loiter [-]
-    Misn_fuel_frac = W_fuel_to_frac * W_fuel_climb_frac * W_fuel_cruise_frac^2 *...
-        W_fuel_loit_frac * W_fuel_land_frac; %Total fuel-weight fraction [-]
-    W_fuel = (1-Misn_fuel_frac)*W_i*1.05; %Total weight of fuel req + 5% [lbs]
     
     %Structure Weight Calculations (Cessna Eqs)
     B = W_i*N*S_w*(1.9*A - 4)/(1 + .11*thicc);
@@ -136,8 +134,11 @@ while(k < max_iter)
     P_req_sl = D_tot_sl.*v_sl; %Power required @ SL [ft*lbs/s]
     P_req_sl = P_req_sl/550;  %Power required @ SL [hp]
     P_av_sl = P_ex + P_req_sl;  %Power required @ SL [hp]
-    [P_engine_sl , i_climb] = min(P_av_sl); %Get max value and indice
-    P_climb = P_engine_sl; %Power the engine needs to produce @ SL [hp]
+    [P_climb , i_climb] = min(P_av_sl); %Get max value and indice
+    if(i_climb < 41) %Need to be at stall condition
+        i_climb = 41;
+        P_climb = P_av_sl(41);
+    end
     v_climb = v_sl(i_climb); %Velocity of climb [fps]
     
     %Calculate what the minimum power needed is
@@ -156,16 +157,41 @@ while(k < max_iter)
     if(index ~= 0)
         W_engine = engines(index,2); %Weight of the engine [lbs]
         P_engine = engines(index, 1); %Engine power [hp]
+        
+    %Fuel Calculations - Raymer
+    c_p_climb = fuelConsumptionRate(P_climb)/(P_climb*3600*550); %Get SFC [ft^-1]
+    c_p_climb = c_p_climb*(rho_5k/rho_sl -...
+        (1 - (rho_5k/rho_sl))/7.55); % Get SFC, Guess at 5k [ft^-1]
+    W_2 = exp(-c_p_climb*(ceil - h_to)/(eta_p_climb*...
+        (1 - D_tot_sl(i_climb)/(P_engine*550*v_climb))))*W_i; %Fuel Weight after climb [lbs]
+    
+    c_p_cruise = fuelConsumptionRate(P_req_10k(i_cr))...
+        /(P_req_10k(i_cr)*3600*550); %Get SFC [ft^-1]
+    c_p_cruise = c_p_cruise*(rho_10k/rho_sl - (1 - (rho_10k/rho_sl))/7.55); %Change for alt [ft^-1]
+    W_3 = exp(-(5280*R_cruise/2)*...
+        c_p_cruise/(L_D_cr*eta_p_cruise))*W_2; %Fuel weight after cruise 1 [lbs]
+    
+    c_p_loit = fuelConsumptionRate(P_req_10k(i_loit))...
+        /(P_req_10k(i_loit)*3600*550); %Convert units [ft^-1]
+    c_p_loit = c_p_loit*(rho_10k/rho_sl - (1 - (rho_10k/rho_sl))/7.55); %Change for alt [ft^-1]
+    W_4 = ((endur*3600*c_p_loit/(eta_p_loit*CL32_CD_loit*sqrt(2*rho_10k*S_w)))...
+        + 1/sqrt(W_3))^-2; %Fuel after loiter [lbs]
+    
+    W_5 = exp(-(5280*R_cruise/2)*...
+        c_p_cruise/(L_D_cr*eta_p_cruise))*W_4; %Fuel weight after cruise 2 [lbs]
+    
+    W_fuel = 1.1*(W_i - W_5); %Total Fuel Used (+10%) [lbs]
     
     %Additional weight values
     Fuel_vol = W_fuel/6.01;  %Volume of fuel [gal]
     W_eng_tot = 1.16*W_engine; %Total Propulsion sys weight [lbs]
     W_nacelle = .175*engines(index,1);  %Nacelle Weight [lbs]
     W_contsys = controls(size(controls));  %Control sys weight [lbs]
-    W_fuelsys = 1.25*(114/454);  %Fuel System weight (1000 ml tank) [lbs] 
+    W_fuelsys = 1.25*(Fuel_vol);  %Fuel System weight (~1 lb for every gallon) [lbs]
+    W_booms = 2*l_t*pi*((1.375/12)^2 - (1.125/12)^2)*(2/6); %Weight of booms [lbs]
     
     W_tot = W_payload(1) + W_fuel + W_wing + W_fuse + W_htail + W_nacelle +...
-        W_vtail + W_eng_tot + W_fuelsys + W_contsys(1);  %Total aircraft weight [lbs]
+        W_vtail + W_eng_tot + W_fuelsys + W_contsys(1) + W_booms;  %Total aircraft weight [lbs]
     
     %Check for convergence
     if(abs(W_i - W_tot) < W_thresh)
@@ -179,7 +205,9 @@ while(k < max_iter)
         W_i = W_tot; %Update weight
         k = k + 1;
     end
-        k = k + 1; 
+    else %Bad index
+        Validity.Weight = false;
+        break;
     end %if index
 
 end %while
@@ -222,7 +250,7 @@ alpha = (-5:10).*pi./180; %AoA [rad]
 CL_tot = CL_0_tot+CL_alpha_tot.*alpha; %3-D lift coefficient for wing and tail [-]
 CL_stall = W_i/(.5*rho_10k*v_stall^2*S_w); %CL at Stall condition [-]
 CL_loit = (2*W_tot)/(rho_10k*(v_loit^2)*S_w); %CL @ Vloit, 10k ft
-CL_cruise = (2*W_tot)/(rho_10k*(v_cruise^2)*S_w);
+CL_cruise = (2*W_tot)/(rho_10k*(v_cruise^2)*S_w); %CL @ Vcruise, 10k ft
 
 alpha_stall = (CL_stall-CL_0_tot)/CL_alpha_tot; %AoA @ Vstall, 10k ft [rad]
 alpha_loit = (CL_loit-CL_0_tot)/(CL_alpha_tot); %AoA @ Vloit, 10k ft [rad]
@@ -233,46 +261,40 @@ a_t=CL_alpha*(1-epsilon_alpha); %3-D lift-curve slope, tail [1/rad]
 
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
 
-theta_f = acos(2*chord_f/chord - 1); %[rad]
+theta_f = acos(2*chord_f/chord_w - 1); %[rad]
 tau = 1 - (theta_f - sin(theta_f)) / pi; % Flap effectiveness factor [-]
-M_acw = 0; %Moment about the AC, [ft-lbs] -> HOW TO CALCULATE THIS
-CM_acw_cr = M_acw/(.5*rho_10k*v_cruise^2*S_w*chord); %Mom. Coeff about AC during cruise [-]
-CM_acw_loit = M_acw/(.5*rho_10k*v_loit^2*S_w*chord); %Mom. Coeff about AC during cruise [-]
+M_acw = 0; %Moment about the AC, theoretically 0 [ft-lbs]
+CM_acw_cr = M_acw/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Mom. Coeff about AC during cruise [-]
+CM_acw_loit = M_acw/(.5*rho_10k*v_loit^2*S_w*chord_w); %Mom. Coeff about AC during cruise [-]
 
-V_H = l_t*S_ht/(chord*S_w); %Tail volume ratio [-]
-
-%Declare symbols
-syms h_cg_sym_cr;
-syms h_cg_sym_loit; 
+V_H = l_t*S_ht/(chord_w*S_w); %Tail volume ratio [-]
 
 h_n = h_acw + V_H*(a_t/a_w)*(1-epsilon_alpha); %Neutral point [-]
 
-%Solve for centers of gravity, wrt wing leading edge, prop to chord [-]
-eq_cr = a_w*((h_cg_sym_cr - h_acw) - V_H*(a_t/a_w)*(1-epsilon_alpha))*alpha_cr...
-    + CM_acw_cr + V_H*a_t*i_t; %At cruise
-eq_loit = a_w*((h_cg_sym_loit - h_acw) - V_H*(a_t/a_w)*(1-epsilon_alpha))*alpha_loit...
-    + CM_acw_loit + V_H*a_t*i_t; %At loiter
+cg_full = ((L_fuse/2)*W_fuse + (l_t + l_wing - (chord_w*.25) + ... %Take off CG wrt nose [ft]
+    (chord_ht*.25))*(W_htail + W_vtail) + L_fuse*(W_engine + W_nacelle) + ...
+    + l_wing*(W_wing + W_contsys(1)) + l_fueltank*(W_fuel + W_fuelsys) +...
+    l_avionics*(W_payload(1)) + (l_t/2 + l_wing - (chord_w*.25))*W_booms)/(W_tot);
+cg_empty = ((L_fuse/2)*W_fuse + (l_t + l_wing - (chord_w*.25) + ... %Take off CG wrt nose [ft]
+    (chord_ht*.25))*(W_htail + W_vtail) + L_fuse*(W_engine + W_nacelle) + ...
+    + l_wing*(W_wing + W_contsys(1)) + l_fueltank*(W_fuelsys) +...
+    l_avionics*(W_payload(1)) + (l_t/2 + l_wing - (chord_w*.25))*W_booms)/(W_tot);
 
-h_cg_solution_set_cr = vpa(solve(eq_cr == 0, h_cg_sym_cr)); %Define solution
-h_cg_cr = double(h_cg_solution_set_cr(1)); %Solve Eq
-h_cg_solution_set_loit = vpa(solve(eq_loit == 0, h_cg_sym_loit)); %Define solution
-h_cg_loit = double(h_cg_solution_set_loit(1)); %Solve Eq
+h_cg_full = (cg_full - l_wing - (chord_w*.25))/chord_w; %CG wrt LE of wing in prop to chord [-]
+h_cg_empty = (cg_empty - l_wing - (chord_w*.25))/chord_w; %CG wrt LE of wing in prop to chord [-]
 
-static_margin_cr = h_n - h_cg_cr; %Static Margin during cruise [-]
-static_margin_loit = h_n - h_cg_loit; %Static Margin during loiter [-]
-
-h_act_cr = l_t/chord + h_cg_cr; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
-h_act_loit = l_t/chord + h_cg_loit; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
+static_margin_full = h_n - h_cg_full; %Static margin at fully loaded [-]
+static_margin_empty = h_n - h_cg_empty; %Static margin at fully loaded [-]
 
 %Check for stability
-%CG must be greater than neutral point
-if(h_cg_cr < h_n) 
+%CG must be in front of neutral point
+if(h_cg_full < h_n) 
     Validity.CG_cr = true;
 else
     Validity.CG_cr = false;
 end
 
-if(h_cg_loit < h_n)
+if(h_cg_empty < h_n)
     Validity.CG_loit = true;
 else
     Validity.CG_loit = false;
@@ -289,11 +311,11 @@ Cm_alphat=-eta*V_H*a_t*(1-epsilon_alpha); %change in AoA moment contribution fro
 %Moments + Coefficients due to wing about CG [-]
 L_w_10k_loit = .5*rho_10k*v_loit^2*CL_loit*S_w; %Lift from wing during loiter [lbs]
 L_w_10k_cr = .5*rho_10k*v_cruise^2*CL_cruise*S_w; %Lift from wing during loiter [lbs]
-M_cgw_loit = M_acw + L_w_10k_loit*(h_cg_loit*chord - h_acw*chord); %Loiter
-M_cgw_cr = M_acw + L_w_10k_cr*(h_cg_cr*chord - h_acw*chord); %Cruise
+M_cgw_loit = M_acw + L_w_10k_loit*(h_cg_loit*chord_w - h_acw*chord_w); %Loiter
+M_cgw_cr = M_acw + L_w_10k_cr*(h_cg_cr*chord_w - h_acw*chord_w); %Cruise
 
-CM_cgw_loit = M_cgw_loit/(.5*rho_10k*v_loit^2*S_w*chord); %Loiter
-CM_cgw_cr = M_cgw_cr/(.5*rho_10k*v_cruise^2*S_w*chord); %Cruise
+CM_cgw_loit = M_cgw_loit/(.5*rho_10k*v_loit^2*S_w*chord_w); %Loiter
+CM_cgw_cr = M_cgw_cr/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Cruise
 
 alpha_t_loit = (1-epsilon_alpha)*alpha_loit - i_t; %Tail Eff. Angle of Attack @ loit [rad]
 alpha_t_cr = (1-epsilon_alpha)*alpha_cr - i_t; %Tail Eff. Angle of Attack @ cruise [rad]
@@ -318,7 +340,7 @@ delta_e_loit = -(CM_0_loit*CL_alpha + CM_alpha_loit*CL_loit)/...
 delta_e_cr = -(CM_0_cr*CL_alpha + CM_alpha_cr*CL_cruise)/...
     (CL_alpha*CM_del_e - CM_alpha_cr*CL_del_e); %Elevator to trim [rad?]
 CL_q = 2*eta*V_H*CL_alpha*(1-epsilon_alpha); %lift coefficient due to pitch rate
-CM_q = -(l_t/chord)*CL_q; %moment coefficient due to pitch rate
+CM_q = -(l_t/chord_w)*CL_q; %moment coefficient due to pitch rate
 
 %------------------------------Lift Calculations--------------------------%
 
@@ -335,16 +357,18 @@ end
 %---------------------Mission Specs Verification--------------------------%
 
 %TODO: ADD TAKE OFF/CLIMB FUEL CONSUMPTION
-Wf_cr_1 = W_i*(1/exp(R_cruise*c_p_cruise...
+Wf_climb = exp(-c_p_climb*(ceil - h_to)/(eta_p_climb*...
+        (1 - D_tot_sl(i_climb)/(P_engine*550*v_climb))))*W_tot;
+Wf_cr_1 = Wf_climb*(1/exp(R_cruise/2*5280*c_p_cruise...
     /(eta_p_cruise*L_D_cr))); %Fuel after cruise to fire [lbs]
-Wf_loit = ((1/Wf_cr_1) + endur*c_p_loit/...
-    (eta_p_loit*L32_D_loit*sqrt(2*rho_10k*S_w)))^-2; %Fuel after loiter [lbs]
-Wf_cr_2 = Wf_loit*(1/exp(R_cruise*c_p_cruise...
+Wf_loit = ((1/sqrt(Wf_cr_1)) + endur*3600*c_p_loit/...
+    (eta_p_loit*CL32_CD_loit*sqrt(2*rho_10k*S_w)))^-2; %Fuel after loiter [lbs]
+Wf_cr_2 = Wf_loit*(1/exp(R_cruise/2*c_p_cruise...
     /(eta_p_cruise*L_D_cr))); %Fuel after cruise from fire [lbs]
 %TODO: ADD LANDING FUEL CONSUMPTION
 
 %Check to see if we have enough fuel
-if((W_i - Wf_cr_2) < W_fuel)
+if((W_tot - Wf_cr_2) < W_fuel)
     Validity.mission = true;
 else
     Validity.mission = false;
@@ -411,10 +435,14 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).W_S = W_tot/S_w;    %Wing Loading [lbs/ft^2]
     Good_designs(n_good).Preq_W = P_needed/W_tot;  %Power Loading [hp/lb]
     Good_designs(n_good).P_needed = P_needed;  %Power actually require [hp]
-    Good_designs(n_good).chord = chord;  %Chord length [ft]
-    Good_designs(n_good).i_t = i_t; %Tail Incidence Angle [deg]
+    Good_designs(n_good).chord_w = chord_w;  %Chord length [ft]
     Good_designs(n_good).chord_f = chord_f; %Flap chord Length [ft]
     Good_designs(n_good).C_m = C_m; %Mean aerodynamic chord [ft]
+    Good_designs(n_good).chord_ht = chord_ht; %Hor. Tail chord [ft]
+    Good_designs(n_good).l_wing = l_wing; %Location of wing center from nose [ft]
+    Good_designs(n_good).l_fueltank = l_fueltank; %location fuel tank from nose [ft]
+    Good_designs(n_good).l_avionics = l_avionics; %Location of avionics from nose [ft]
+ 
 
     %Save the weight breakdown as well
     Good_designs(n_good).w_payload = W_payload(1);  %Weight of the payload [lbs]
@@ -450,8 +478,11 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).CM_acw_cr = CM_acw_cr; %Mom. Coeff about AC during cruise [-]
     Good_designs(n_good).CM_acw_loit = CM_acw_loit; %Mom. Coeff about AC during cruise [-]
     Good_designs(n_good).V_H = V_H; %Tail volume ratio [-]
-    Good_designs(n_good).static_margin_cr = static_margin_cr; %Static Margin during cruise [-]
-    Good_designs(n_good).static_margin_loit = static_margin_loit; %Static Margin during loiter [-]
+    Good_designs(n_good).h_n = h_n; %NP wrt LE of wing in prop to chord [-]
+    Good_designs(n_good).cg_full = cg_full; %Location of CG from nose [ft]
+    Good_designs(n_good).cg_empty = cg_empty; %Location of CG from nose [ft]
+    Good_designs(n_good).static_margin_full = static_margin_full; %Static Margin during cruise [-]
+    Good_designs(n_good).static_margin_empty = static_margin_empty; %Static Margin during loiter [-]
     Good_designs(n_good).h_act_cr = h_act_cr; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
     Good_designs(n_good).h_act_loit = h_act_loit; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
     
@@ -510,10 +541,14 @@ else
     Bad_designs(n_bad).W_S = W_tot/S_w;    %Wing Loading [lbs/ft^2]
     Bad_designs(n_bad).Preq_W = P_needed/W_tot;  %Power Loading [hp/lb]
     Bad_designs(n_bad).P_needed = P_needed;  %Power actually require [hp]
-    Bad_designs(n_bad).chord = chord;  %Chord length [ft]
-    Bad_designs(n_bad).i_t = i_t; %Tail Incidence Angle [deg]
+    Bad_designs(n_bad).chord = chord_w;  %Chord length [ft]
     Bad_designs(n_bad).chord_f = chord_f; %Flap chord Length [ft]
     Bad_designs(n_bad).C_m = C_m; %Mean aerodynamic chord [ft]
+    Bad_designs(n_bad).chord_ht = chord_ht; %Hor. Tail chord [ft]
+    Bad_designs(n_bad).l_wing = l_wing; %Location of wing center from nose [ft]
+    Bad_designs(n_bad).l_fueltank = l_fueltank; %location fuel tank from nose [ft]
+    Bad_designs(n_bad).l_avionics = l_avionics; %Location of avionics from nose [ft]
+ 
 
     %Save the weight breakdown as well
     Bad_designs(n_bad).w_payload = W_payload(1);  %Weight of the payload [lbs]
@@ -549,8 +584,11 @@ else
     Bad_designs(n_bad).CM_acw_cr = CM_acw_cr; %Mom. Coeff about AC during cruise [-]
     Bad_designs(n_bad).CM_acw_loit = CM_acw_loit; %Mom. Coeff about AC during cruise [-]
     Bad_designs(n_bad).V_H = V_H; %Tail volume ratio [-]
-    Bad_designs(n_bad).static_margin_cr = static_margin_cr; %Static Margin during cruise [-]
-    Bad_designs(n_bad).static_margin_loit = static_margin_loit; %Static Margin during loiter [-]
+    Bad_designs(n_bad).h_n = h_n; %NP wrt LE of wing in prop to chord [-]
+    Bad_designs(n_bad).cg_full = cg_full; %Location of CG from nose [ft]
+    Bad_designs(n_bad).cg_empty = cg_empty; %Location of CG from nose [ft]
+    Bad_designs(n_bad).static_margin_full = static_margin_full; %Static Margin during cruise [-]
+    Bad_designs(n_bad).static_margin_empty = static_margin_empty; %Static Margin during loiter [-]
     Bad_designs(n_bad).h_act_cr = h_act_cr; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
     Bad_designs(n_bad).h_act_loit = h_act_loit; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
     
@@ -646,13 +684,11 @@ Cm_0f=((k2_k1)/(36.5*S_w*144*11.21))*((wf_1^2)*dx1+(wf_2^2)...
     *dx2+(wf_3^2)*dx3+(wf_4^2)*dx4+(wf_5^2)*dx5+(wf_6^2)*wf_6)*alpha_ZL; %estimation of contribution of fuselage to moment coeff at zero AoA [1/rad]
     
 %TODO
-%How do we update the TSFC -> What is it initially and how does it
-% change with velocity?
 %Why are we having issues with total lift?
 %Add stability calculations
 %    - Longitudinal Control
 %    - Directional Control
 %More checks -> How do we show its stable?
-%Takeoff, climb, landing fuel consumption?
 %Finish labeling everything and cleaning up code
+%Maybe an exact parasitic drag?
 %TRIPLE CHECK LITERALLY EVERYTHING

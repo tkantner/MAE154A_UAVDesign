@@ -213,12 +213,10 @@ end %while
 
 %Lift curve slopes are from Cl vs. Alpha graphs for 4412
 a_w = 1.50/10;  %2-D Wing lift-curve slope [deg^-1]
-a_w = a_w*360/2/pi; %Wing lift-curve slope [rad^-1]
-a_t = 1.50/10; %Tail lift-curve slope [deg^-1]
-a_t = a_t*360/2/pi; %Tail lift-curve slope [deg^-1]
+a_w = a_w*180/pi; %2-D Wing lift-curve slope [rad^-1]
 alpha_ZL = -4.35; %Zero-lift AoA for NACA 4412 [deg]
 alpha_ZL = alpha_ZL*pi/180; %zero lift AoA for NACA 4412 [rad]
-CL_w0=-alpha_ZL*a_w;
+CL_w0 = -alpha_ZL*a_w;
 
 cl_NACA1 = 0.4833; %two points on for airfoil cl curve in linear region
 cl_NACA2 = 0.5102;
@@ -237,14 +235,16 @@ beta_stall = (1-M_stall^2)^0.5; %Correction factor
 
 kk_stall = Cl_alpha/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
 CL_alpha = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall)^2+4)); %3-d lift-curve slope for wing ([-]
-CL_0_HT = 0; %3-d CL0 for tail [-]
+a_w_3d = CL_alpha; %3-D lift-curve slope, wing [1/rad]
+CL_0_HT = 0; %3-d CL0 for tail (Symmetric) [-]
 CL_0_tot = Cl_0+(S_ht/S_w)*CL_0_HT; %3-d CL total for wing + tail [-]
 epsilon_0 = (2*CL_0_tot)/(pi*A); 
-epsilon_alpha = (2*a_w)/(pi*A); % Downwash efficiency loss [-]
-CL_alpha_tot = CL_alpha+(S_ht/S_w)*CL_alpha*(1-epsilon_alpha); %3-D lift curve total slope for wing and tail (1/rad)
-alpha = (-5:10).*pi./180; %AoA [rad]
+epsilon_alpha = (2*a_w_3d)/(pi*A); % Downwash efficiency loss [-]
+a_t_3d = CL_alpha*(1-epsilon_alpha); %3-D lift-curve slope, tail [1/rad]
+CL_alpha_tot = CL_alpha + (S_ht/S_w)*CL_alpha*(1-epsilon_alpha); %3-D lift curve total slope for wing and tail (1/rad)
+alpha = (-5:10).*pi./180; %AoA Vector [rad]
 
-CL_tot = CL_0_tot+CL_alpha_tot.*alpha; %3-D lift coefficient for wing and tail [-]
+CL_tot = CL_0_tot + CL_alpha_tot.*alpha; %3-D lift coefficient for wing and tail [-]
 CL_climb = W_tot/(.5*rho_sl*v_climb^2*S_w);
 CL_stall = W_tot/(.5*rho_10k*v_stall^2*S_w); %CL at Stall condition [-]
 CL_loit = (2*W_tot)/(rho_10k*(v_loit^2)*S_w); %CL @ Vloit, 10k ft
@@ -254,8 +254,7 @@ alpha_stall = (CL_stall-CL_0_tot)/CL_alpha_tot; %AoA @ Vstall, 10k ft [rad]
 alpha_loit = (CL_loit-CL_0_tot)/(CL_alpha_tot); %AoA @ Vloit, 10k ft [rad]
 alpha_cr = (CL_cruise - CL_0_tot)/CL_alpha_tot; %AoA @ Vcruise, 10k ft [rad]
 alpha_climb = (CL_climb - CL_0_tot)/(CL_alpha_tot); %AOA @ Vclimb, sl [rad]
-a_w=CL_alpha; %3-D lift-curve slope, wing [1/rad]
-a_t=CL_alpha*(1-epsilon_alpha); %3-D lift-curve slope, tail [1/rad]
+
 
 %-----------------------------CG/NP/SM Calculations-----------------------%
 
@@ -286,7 +285,7 @@ else
     Validity.V_V = false;
 end
 
-h_n = h_acw + V_H*(a_t/a_w)*(1-epsilon_alpha); %Neutral point [-]
+h_n = h_acw + V_H*(a_t_3d/a_w_3d)*(1-epsilon_alpha); %Neutral point [-]
 
 cg_full = ((L_fuse/2)*W_fuse + (l_t + l_wing - (chord_w*.25) + ... %Take off CG wrt nose [ft]
     (chord_ht*.25))*(W_htail + W_vtail) + L_fuse*(W_engine + W_nacelle) + ...
@@ -319,9 +318,9 @@ end
 
 %----------------MOMENT COEFFICIENT INDIVIDUAL COMPONENTS-----------------%
 
-eta=1; %ratio of dynamic pressure at tail/dynamic pressure at wing [-]
-Cm_0t=eta*V_H*a_t*(epsilon_0-i_t); %zero AoA moment contribution from tail
-Cm_alphat=-eta*V_H*a_t*(1-epsilon_alpha); %change in AoA moment contribution from tail [1/rad]
+eta = 1; %ratio of dynamic pressure at tail/dynamic pressure at wing [-]
+Cm_0t = eta*V_H*a_t_3d*(epsilon_0-i_t); %zero AoA moment contribution from tail
+Cm_alphat = -eta*V_H*a_t_3d*(1-epsilon_alpha); %change in AoA moment contribution from tail [1/rad]
 
 %----------------------Other Stability Calculations-----------------------%
 
@@ -337,21 +336,21 @@ CM_cgw_cr = M_cgw_cr/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Cruise
 
 alpha_t_loit = (1-epsilon_alpha)*alpha_loit - i_t; %Tail Eff. Angle of Attack @ loit [rad]
 alpha_t_cr = (1-epsilon_alpha)*alpha_cr - i_t; %Tail Eff. Angle of Attack @ cruise [rad]
-CL_t_loit = a_t*alpha_t_loit; %Tail coeff. of lift at loiter [-]
-CL_t_cr = a_t*alpha_t_cr; %Tail coeff. of lift at cruise [-]
+CL_t_loit = a_t_3d*alpha_t_loit; %Tail coeff. of lift at loiter [-]
+CL_t_cr = a_t_3d*alpha_t_cr; %Tail coeff. of lift at cruise [-]
 CM_cgt_loit = V_H*CL_t_loit; % Moment Coeff. due to tail about CG at loiter [-]
 CM_cgt_cr = V_H*CL_t_cr; % Moment Coeff. due to tail about CG at cruise [-]
 
-CM_0_loit = CM_acw_loit + V_H*a_t*i_t;
-CM_0_cr = CM_acw_cr + V_H*a_t*i_t;
+CM_0_loit = CM_acw_loit + V_H*a_t_3d*i_t;
+CM_0_cr = CM_acw_cr + V_H*a_t_3d*i_t;
 
-CL_alpha = a_w + a_t*(S_ht/S_w)*(1-epsilon_alpha);
+CL_alpha = a_w_3d + a_t_3d*(S_ht/S_w)*(1-epsilon_alpha);
 CM_alpha_cr = CL_alpha*(h_cg_cr - h_n);
 CM_alpha_loit = CL_alpha*(h_cg_loit - h_n);
-CL_0 = -a_t*(S_ht/S_w)*i_t;
+CL_0 = -a_t_3d*(S_ht/S_w)*i_t;
 
-CL_del_e = tau*a_t*(S_ht/S_w); 
-CM_del_e = -tau*V_H*a_t;
+CL_del_e = tau*a_t_3d*(S_ht/S_w); 
+CM_del_e = -tau*V_H*a_t_3d;
 
 delta_e_loit = -(CM_0_loit*CL_alpha + CM_alpha_loit*CL_loit)/...
     (CL_alpha*CM_del_e - CM_alpha_loit*CL_del_e); %Elevator to trim [rad?]
@@ -363,8 +362,8 @@ CM_q = -(l_t/chord_w)*CL_q; %moment coefficient due to pitch rate
 %------------------------------Lift Calculations--------------------------%
 
 %Check Lift at stall
-L_tot_stall = .5*rho_10k*v_stall^2*((a_w + a_t*(S_ht/S_w)*...
-    (1 - epsilon_alpha))*alpha_stall + a_t*(S_ht/S_w)*i_t); %Total Lift [lbs]
+L_tot_stall = .5*rho_10k*v_stall^2*((a_w_3d + a_t_3d*(S_ht/S_w)*...
+    (1 - epsilon_alpha))*alpha_stall + a_t_3d*(S_ht/S_w)*i_t); %Total Lift [lbs]
 
 if(L_tot_stall >= W_i) %If more lift than weight
     Validity.Lift = true; %Mark as valid

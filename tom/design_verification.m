@@ -61,7 +61,8 @@ L_fuse = 1.5 + rand*1.5; %Length of fuselage [ft]
 Wid_fuse = .5 + rand*.5;  %Width of fuselage [ft]
 D_fuse = .5 + rand*.5; %Depth of fuselage [ft]
 S_ht = .5 + rand*.5; %Horizontal tail surface area [ft^2]
-l_t = 1.5 + rand*1; %Distance from wing 1/4 MAC to tail 1/4 MAC [ft]
+l_t = 1.5 + rand*1; %Distance from wing 1/4 MAC to hor tail 1/4 MAC [ft]
+l_v = l_t + rand - rand; %Distance from wing 1/4 MAC to vert tail 1/4 MAC [ft]
 b_h = .5 + rand*.5; %Horizontal tail span [ft]
 S_vt = .5 + rand*.5; %Vertical tail surface area [ft^2] 
 b_v = .5 + rand*.5; %Vertical tail span [ft]
@@ -135,10 +136,6 @@ while(k < max_iter)
     P_req_sl = P_req_sl/550;  %Power required @ SL [hp]
     P_av_sl = P_ex + P_req_sl;  %Power required @ SL [hp]
     [P_climb , i_climb] = min(P_av_sl); %Get max value and indice
-    %if(i_climb < 41) %Need to be at stall condition
-       % i_climb = 41;
-      %  P_climb = P_av_sl(41);
-   % end
     v_climb = v_sl(i_climb); %Velocity of climb [fps]
     
     %Calculate what the minimum power needed is
@@ -248,13 +245,15 @@ CL_alpha_tot = CL_alpha+(S_ht/S_w)*CL_alpha*(1-epsilon_alpha); %3-D lift curve t
 alpha = (-5:10).*pi./180; %AoA [rad]
 
 CL_tot = CL_0_tot+CL_alpha_tot.*alpha; %3-D lift coefficient for wing and tail [-]
-CL_stall = W_i/(.5*rho_10k*v_stall^2*S_w); %CL at Stall condition [-]
+CL_climb = W_tot/(.5*rho_sl*v_climb^2*S_w);
+CL_stall = W_tot/(.5*rho_10k*v_stall^2*S_w); %CL at Stall condition [-]
 CL_loit = (2*W_tot)/(rho_10k*(v_loit^2)*S_w); %CL @ Vloit, 10k ft
 CL_cruise = (2*W_tot)/(rho_10k*(v_cruise^2)*S_w); %CL @ Vcruise, 10k ft
 
 alpha_stall = (CL_stall-CL_0_tot)/CL_alpha_tot; %AoA @ Vstall, 10k ft [rad]
 alpha_loit = (CL_loit-CL_0_tot)/(CL_alpha_tot); %AoA @ Vloit, 10k ft [rad]
 alpha_cr = (CL_cruise - CL_0_tot)/CL_alpha_tot; %AoA @ Vcruise, 10k ft [rad]
+alpha_climb = (CL_climb - CL_0_tot)/(CL_alpha_tot); %AOA @ Vclimb, sl [rad]
 a_w=CL_alpha; %3-D lift-curve slope, wing [1/rad]
 a_t=CL_alpha*(1-epsilon_alpha); %3-D lift-curve slope, tail [1/rad]
 
@@ -270,13 +269,21 @@ CM_acw_cr = M_acw/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Mom. Coeff about AC duri
 CM_acw_loit = M_acw/(.5*rho_10k*v_loit^2*S_w*chord_w); %Mom. Coeff about AC during cruise [-]
 
 V_H = l_t*S_ht/(chord_w*S_w); %Hor Tail volume ratio [-]
-V_V = l_t*S_vt(
+V_V = l_v*S_vt/(b_w*S_w); %Vert Tail volume ratio [-]
 
-%From
+%From https://ocw.mit.edu/courses/aeronautics-and-astronautics/16-01
+%-unified-engineering-i-ii-iii-iv-fall-2005-spring-2006/systems-labs-06/spl8.pdf
+%Check tail volume ratios
 if(V_H >= 0.3 && V_H <= 0.6)
     Validity.V_H = true;
 else
     Validity.V_H = false;
+end
+
+if(V_V >= 0.02 && V_V <= 0.05)
+    Validity.V_V = true;
+else
+    Validity.V_V = false;
 end
 
 h_n = h_acw + V_H*(a_t/a_w)*(1-epsilon_alpha); %Neutral point [-]
@@ -299,15 +306,15 @@ static_margin_empty = h_n - h_cg_empty; %Static margin at fully loaded [-]
 %Check for stability
 %SM must be positive, don't want it too low or high
 if(static_margin_full >= 0.05 && static_margin_full <= 0.15) 
-    Validity.CG_cr = true;
+    Validity.CG_full = true;
 else
-    Validity.CG_cr = false;
+    Validity.CG_full = false;
 end
 
-if(static_margin_full >= 0.05 && static_margin_full <= 0.15)
-    Validity.CG_loit = true;
+if(static_margin_empty >= 0.05 && static_margin_empty <= 0.15)
+    Validity.CG_empty = true;
 else
-    Validity.CG_loit = false;
+    Validity.CG_empty = false;
 end
 
 %----------------MOMENT COEFFICIENT INDIVIDUAL COMPONENTS-----------------%
@@ -319,6 +326,7 @@ Cm_alphat=-eta*V_H*a_t*(1-epsilon_alpha); %change in AoA moment contribution fro
 %----------------------Other Stability Calculations-----------------------%
 
 %Moments + Coefficients due to wing about CG [-]
+L_w_sl_climb = .5*rho_sl*v_climb^2*CL_climb*S_w; %Lift from wing during climb at sl [lbs]
 L_w_10k_loit = .5*rho_10k*v_loit^2*CL_loit*S_w; %Lift from wing during loiter [lbs]
 L_w_10k_cr = .5*rho_10k*v_cruise^2*CL_cruise*S_w; %Lift from wing during loiter [lbs]
 M_cgw_loit = M_acw + L_w_10k_loit*(h_cg_loit*chord_w - h_acw*chord_w); %Loiter

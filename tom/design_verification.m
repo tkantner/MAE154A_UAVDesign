@@ -257,15 +257,15 @@ alpha_climb = (CL_climb - CL_0_tot)/(CL_alpha_tot); %AOA @ Vclimb, sl [rad]
 
 
 %-----------------------------CG/NP/SM Calculations-----------------------%
-
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
-
 
 theta_f = acos(2*chord_f/chord_w - 1); %[rad]
 tau = 1 - (theta_f - sin(theta_f)) / pi; % Flap effectiveness factor [-]
-M_acw = 0; %Moment about the AC, theoretically 0 [ft-lbs]
-CM_acw_cr = M_acw/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Mom. Coeff about AC during cruise [-]
-CM_acw_loit = M_acw/(.5*rho_10k*v_loit^2*S_w*chord_w); %Mom. Coeff about AC during cruise [-]
+CM_acw = -0.09; %Moment about the AC, theoretically 0 (NASA Report) [ft-lbs]
+M_acw_cr = CM_acw*.5*rho_10k*v_cruise^2*S_w*chord_w; %Mom. about AC during cruise [-]
+M_acw_loit = CM_acw*.5*rho_10k*v_loit^2*S_w*chord_w; %Mom. about AC during cruise [-]
+M_acw_stall = CM_acw*.5*rho_10k*v_stall^2*S_w*chord_w; %Mom. about AC during cruise [-]
+M_acw_climb = CM_acw*.5*rho_sl*v_climb^2*S_w*chord_w; %Mom. about AC during cruise [-]
 
 V_H = l_t*S_ht/(chord_w*S_w); %Hor Tail volume ratio [-]
 V_V = l_v*S_vt/(b_w*S_w); %Vert Tail volume ratio [-]
@@ -319,21 +319,41 @@ end
 %----------------MOMENT COEFFICIENT INDIVIDUAL COMPONENTS-----------------%
 
 eta = 1; %ratio of dynamic pressure at tail/dynamic pressure at wing [-]
-Cm_0t = eta*V_H*a_t_3d*(epsilon_0-i_t); %zero AoA moment contribution from tail
-Cm_alphat = -eta*V_H*a_t_3d*(1-epsilon_alpha); %change in AoA moment contribution from tail [1/rad]
+%Cm_0t = eta*V_H*a_t_3d*(epsilon_0-i_t); %zero AoA moment contribution from tail
+%Cm_alphat = -eta*V_H*a_t_3d*(1-epsilon_alpha); %change in AoA moment contribution from tail [1/rad]
 
 %----------------------Other Stability Calculations-----------------------%
-
-%Moments + Coefficients due to wing about CG [-]
 L_w_sl_climb = .5*rho_sl*v_climb^2*CL_climb*S_w; %Lift from wing during climb at sl [lbs]
 L_w_10k_loit = .5*rho_10k*v_loit^2*CL_loit*S_w; %Lift from wing during loiter [lbs]
 L_w_10k_cr = .5*rho_10k*v_cruise^2*CL_cruise*S_w; %Lift from wing during loiter [lbs]
-M_cgw_loit = M_acw + L_w_10k_loit*(h_cg_loit*chord_w - h_acw*chord_w); %Loiter
-M_cgw_cr = M_acw + L_w_10k_cr*(h_cg_cr*chord_w - h_acw*chord_w); %Cruise
+L_w_10k_stall = .5*rho_10k*v_stall^2*CL_stall*S_w; %Lift from wing during loiter [lbs]
 
-CM_cgw_loit = M_cgw_loit/(.5*rho_10k*v_loit^2*S_w*chord_w); %Loiter
-CM_cgw_cr = M_cgw_cr/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Cruise
+%Moments due to wing about CG [-]
+M_cgw_loit_full = M_acw + L_w_10k_loit*(h_cg_full*chord_w - h_acw*chord_w); %Loiter Full
+M_cgw_cr_full = M_acw + L_w_10k_cr*(h_cg_full*chord_w - h_acw*chord_w); %Cruise Full
+M_cgw_climb_full = M_acw + L_w_sl_climb*(h_cg_full*chord_w - h_acw*chord_w); %Climb Full
+M_cgw_stall_full = M_acw + L_w_10k_stall*(h_cg_full*chord_w - h_acw*chord_w); %Stall Full
+M_cgw_loit_empty = M_acw + L_w_10k_loit*(h_cg_empty*chord_w - h_acw*chord_w); %Loiter Empty
+M_cgw_cr_empty = M_acw + L_w_10k_cr*(h_cg_empty*chord_w - h_acw*chord_w); %Cruise Empty
+M_cgw_stall_empty = M_acw + L_w_10k_stall*(h_cg_empty*chord_w - h_acw*chord_w); %Stall Empty
 
+%Moment coeffs due to wing about CG [-]
+CM_cgw_loit_full = M_cgw_loit_full/(.5*rho_10k*v_loit^2*S_w*chord_w); %Loiter Full
+CM_cgw_cr_full = M_cgw_cr_full/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Cruise Full
+CM_cgw_stall_full = M_cgw_stall_full/(.5*rho_10k*v_stall^2*S_w*chord_w); %Stall Full
+CM_cgw_climb_full = M_cgw_climb_full/(.5*rho_10k*v_climb^2*S_w*chord_w); %Climb Full
+CM_cgw_loit_empty = M_cgw_loit_empty/(.5*rho_10k*v_loit^2*S_w*chord_w); %Loiter Full
+CM_cgw_cr_empty = M_cgw_cr_empty/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Cruise Full
+CM_cgw_stall_empty = M_cgw_stall_empty/(.5*rho_10k*v_stall^2*S_w*chord_w); %Stall Full
+
+CM_alpha_full = CL_alpha*(h_cg_full - h_n);
+CM_alpha_empty = CL_alpha*(h_cg_empty - h_n);
+
+%CM_i = 
+
+%i_t_cr_full = CM_ac
+
+x = 1;
 alpha_t_loit = (1-epsilon_alpha)*alpha_loit - i_t; %Tail Eff. Angle of Attack @ loit [rad]
 alpha_t_cr = (1-epsilon_alpha)*alpha_cr - i_t; %Tail Eff. Angle of Attack @ cruise [rad]
 CL_t_loit = a_t_3d*alpha_t_loit; %Tail coeff. of lift at loiter [-]
@@ -508,8 +528,8 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).Cm_alphat = Cm_alphat; %change in AoA moment contribution from tail [1/rad]
     Good_designs(n_good).L_w_10k_loit = L_w_10k_loit; %Lift from wing during loiter [lbs]
     Good_designs(n_good).L_w_10k_cr = L_w_10k_cr; %Lift from wing during loiter [lbs]
-    Good_designs(n_good).M_cgw_loit = M_cgw_loit; %Loiter
-    Good_designs(n_good).M_cgw_cr = M_cgw_cr; %Cruise
+    Good_designs(n_good).M_cgw_loit = M_cgw_loit_full; %Loiter
+    Good_designs(n_good).M_cgw_cr = M_cgw_cr_full; %Cruise
     Good_designs(n_good).CM_cgw_loit = CM_cgw_loit; %Loiter
     Good_designs(n_good).CM_cgw_cr = CM_cgw_cr; %Cruise
     Good_designs(n_good).alpha_t_loit = alpha_t_loit; %Tail Eff. Angle of Attack @ loit [rad]
@@ -614,8 +634,8 @@ else
     Bad_designs(n_bad).Cm_alphat = Cm_alphat; %change in AoA moment contribution from tail [1/rad]
     Bad_designs(n_bad).L_w_10k_loit = L_w_10k_loit; %Lift from wing during loiter [lbs]
     Bad_designs(n_bad).L_w_10k_cr = L_w_10k_cr; %Lift from wing during loiter [lbs]
-    Bad_designs(n_bad).M_cgw_loit = M_cgw_loit; %Loiter
-    Bad_designs(n_bad).M_cgw_cr = M_cgw_cr; %Cruise
+    Bad_designs(n_bad).M_cgw_loit = M_cgw_loit_full; %Loiter
+    Bad_designs(n_bad).M_cgw_cr = M_cgw_cr_full; %Cruise
     Bad_designs(n_bad).CM_cgw_loit = CM_cgw_loit; %Loiter
     Bad_designs(n_bad).CM_cgw_cr = CM_cgw_cr; %Cruise
     Bad_designs(n_bad).alpha_t_loit = alpha_t_loit; %Tail Eff. Angle of Attack @ loit [rad]

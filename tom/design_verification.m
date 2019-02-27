@@ -11,6 +11,7 @@ clear; close all; clc;
 engines = xlsread('Engine_Database.xlsx'); %Remember to assort by increasing
 avionics = xlsread('Avionics_Weight_Budget.xlsx');
 controls = xlsread('Control_Weight_Budget.xlsx');
+airfoils = xlsread('Airfoil_Database.xlsx');
 
 %Physical constants
 rho_10k = 17.56e-4; %Atmos. Density at 10k ft [slugs/ft^3]
@@ -28,7 +29,7 @@ RC = 1500;  %Rate of Climb [fpm]
 RC = RC/60; %Rate of Climb [fps]
 R_cruise = 60; %Cruising 
 h_to = 315; %Take off altitude [ft]
-ceil = 10000; %Ceiling [ft]
+ceiling = 10000; %Ceiling [ft]
 v_max_sl = 150;  %Max Speed @ SL [mph]
 v_max_sl = v_max_sl*5280/3600; %Max speed @ SL [fps]
 v_max_10k = 180;  %Max Speed @ 10k [mph]
@@ -50,35 +51,44 @@ n_good = 0;
 n_bad = 0;
 
 %Randomly generate designs
-for n = 1:100
+for n = 1:100000
 
+af_num = ceil(rand*size(airfoils,1));   
+ 
 %Randomly Generate a Design
 S_w = 1 + rand*3;  %Wing Surface Area [ft^2]
 b_w = 2 + rand*4;  %Wingspan [ft]
 e = 0.7; %Rectangular wing efficiency [-]
 lam_1_4 = 0; %Wing Quarter chord sweep [rad]
 lam = 1;   %Taper ratio [-]
-thicc_w = .12; %Max chord thickness ratio of wing [-]
+thicc_w = airfoils(af_num,2); %Max chord thickness ratio of wing [-]
 thicc_ht = .12; %Max chord thickness ratio of hor. tail [-]
 thicc_vt = .08; %Max chord thickness ratio of vert. tail [-]
 N = 4;  %Ultimate load factor (fixed) [-]
 L_fuse = b_w*(0.7+.05*rand); %Length of fuselage [ft] (70-75% of wingspan)
 Wid_fuse = L_fuse*(0.1+0.1*rand);  %Width of fuselage [ft] (10-20% of fuselage length)
 D_fuse = Wid_fuse; %Depth of fuselage [ft] (same as fuselage width)
-S_ht = (rand*0.1+0.2)*S_w; %Horizontal tail surface area [ft^2] (10-20% of wingspan)
+%S_ht = (rand*0.1+0.2)*S_w; %Horizontal tail surface area [ft^2] (10-20% of wingspan)
 l_t = 1.5 + rand*1; %Distance from wing 1/4 MAC to hor tail 1/4 MAC [ft]
 l_v = l_t + rand - rand; %Distance from wing 1/4 MAC to vert tail 1/4 MAC [ft]
 b_h = .5 + rand*.5; %Horizontal tail span [ft]
-S_vt = (rand*0.1+0.05)*S_w; %Vertical tail surface area [ft^2] (10-15% of wingspan)
+%S_vt = (rand*0.1+0.05)*S_w; %Vertical tail surface area [ft^2] (10-15% of wingspan)
 b_v = .5 + rand*.5; %Vertical tail span [ft]
 chord_w = S_w/b_w;  %Wing Chord length [ft]
-chord_ht = S_ht/b_h; %Hor. Tail Chord [ft]
 l_wing = 1 + 1*rand; %Location of wing center from nose [ft]
 A = b_w^2/S_w; % Aspect Ratio [-]
 l_fueltank = l_wing-0.75*(b_w/A)+(0.5*round(b_w/A))*rand; %Location of fuel tank center from nose [ft]
 l_avionics = .25 + .5*rand; %Location of avionics center from nose [ft]
 chord_f = .1 + .9*rand; %Flap chord Length [ft]
 C_m = S_w/b_w; %Mean aerodynamic chord [ft]
+x_cm = airfoils(af_num, 3);  %Location of max airfoil thickness
+%V_H = l_t*S_ht/(chord_w*S_w); %Hor Tail volume ratio [-]
+%V_V = l_v*S_vt/(b_w*S_w); %Vert Tail volume ratio [-]
+V_H = .45;
+V_V = 0.03;
+S_ht = V_H*chord_w*S_w/l_t;
+S_vt = V_V*b_w*S_w/l_v;
+chord_ht = S_ht/b_h; %Hor. Tail Chord [ft]
 
 %Velocity Vectors
 v_sl = linspace(50,v_max_sl); % Velocity vector at sea level [fps]
@@ -109,12 +119,6 @@ end
 %Fuselage - https://onlinelibrary.wiley.com/doi/pdf/10.1002/9781118568101.app1
 S_wet_fuse = pi*D_fuse*(L_fuse - 1.3*D_fuse);
 
-%Convert to [in^2]
-S_wet_w = S_wet_w/144;
-S_wet_ht = S_wet_ht/144;
-S_wet_vt = S_wet_vt/144;
-S_wet_fuse = S_wet_fuse/144;
-
 %We want a higher aspect ratio
 if (A <= 4)
     continue;
@@ -134,34 +138,55 @@ if(Wid_fuse < .5) %Not big enough to hold camera
 end
 
 %Initial Guesses
-v_loit_i = v_stall; %Loiter Velocity [fps]
+v_loit_i = (v_stall + v_max_10k) /2; %Loiter Velocity [fps]
 v_climb_i = v_stall; %Climb Velocity [fps]
 v_cruise_i = v_stall; %Cruise Velocity [fps]
 W_i = 20; %Initial Weight guess [lbs]
-static_margin_full_i = 0.1; %Static Margin Guess [-]
+static_margin_full_i = 0.005; %Static Margin Guess [-]
 W_engine_i = 3; %Engine weight guess [lbs]
 P_engine_i = 2; %Engine Power Guess [hp]
+W_fuel_i = 4; %Fuel Weight [lbs]
 
 k = 0;
 max_iter = 50;
 %Thresholds for Convergence
-W_thresh = 0.1; 
+W_thresh = 0.05; 
 static_margin_full_thresh = 0.01;
 while(k < max_iter) %Let's begin!
 
+%-------------------------Static Weight Calculations ---------------------%
+%Structure Weight Calculations (Cessna Eqs)
+B = W_i*N*S_w*(1.9*A - 4)/(1 + .11*thicc_w);
+W_wing = 69*(B*10^-6)^.69; %Weight of the wing [lbs]
+W_fuse = .11*W_i; %Weight of the fuselage [lbs]
+W_htail = 1.2*(W_i/3000)^.25*S_ht;  %Weight of Horizontal tail [lbs]
+W_vtail = 1.28*S_vt; %Weight of Vertical tail [lbs]
+W_booms = 2*l_t*pi*((1.375/12)^2 - (1.125/12)^2)*(2/6); %Weight of booms [lbs]
+W_contsys = controls(size(controls));  %Control sys weight [lbs]
+
+%Fuel Weights
+Fuel_vol = W_fuel_i/6.01;  %Volume of fuel [gal]
+W_eng_tot = 1.16*W_engine_i; %Total Propulsion sys weight [lbs]
+W_nacelle = .175*P_engine_i;  %Nacelle Weight [lbs]
+W_fuelsys = 1.25*(Fuel_vol);  %Fuel System weight (~1 lb for every gallon) [lbs]
+
+W_tot = W_payload(1) + W_fuel_i + W_wing + W_fuse + W_htail + W_nacelle +...
+    W_vtail + W_eng_tot + W_fuelsys + W_contsys(1) + W_booms;  %Total aircraft weight [lbs]  
+    
 %-----------------------------Airfoil + Lift------------------------------%
+
 %Lift curve slopes are from Cl vs. Alpha graphs for 4412
-a_w = 1.50/10;  %2-D Wing lift-curve slope [deg^-1]
+a_w = airfoils(af_num, 4);  %2-D Wing lift-curve slope [deg^-1]
 a_w = a_w*180/pi; %2-D Wing lift-curve slope [rad^-1]
-alpha_ZL = -4.35; %Zero-lift AoA for NACA 4412 [deg]
+alpha_ZL = airfoils(af_num, 1); %Zero-lift AoA for NACA 4412 [deg]
 alpha_ZL = alpha_ZL*pi/180; %zero lift AoA for NACA 4412 [rad]
 CL_w0 = -alpha_ZL*a_w;
 
-cl_NACA1 = 0.4833; %two points on for airfoil cl curve in linear region
-cl_NACA2 = 0.5102;
-alpha_NACA1 = 0; %two points on airfoil cl curve in linear region, alpha [deg]
+cl_NACA1 = airfoils(af_num, 6); %two points on for airfoil cl curve in linear region
+cl_NACA2 = airfoils(af_num, 8);
+alpha_NACA1 = airfoils(af_num, 7); %two points on airfoil cl curve in linear region, alpha [deg]
 alpha_NACA1 = alpha_NACA1*pi/180; %two points on airfoil cl curve in linear region, alpha [rad]
-alpha_NACA2 = 0.2500; %two points on airfoil cl curve in linear region, alpha [deg]
+alpha_NACA2 = airfoils(af_num, 9); %two points on airfoil cl curve in linear region, alpha [deg]
 alpha_NACA2 = alpha_NACA2*pi/180; %two points on cl curve in linear region, alpha [rad]
 
 Cl_alpha = (cl_NACA2-cl_NACA1)/(alpha_NACA2-alpha_NACA1); %2-D lift-curve slope [1/rad]
@@ -183,17 +208,17 @@ a_t_3d = CL_alpha*(1-epsilon_alpha); %3-D lift-curve slope, tail [1/rad]
 CL_alpha_tot = CL_alpha +...
     (S_ht/S_w)*CL_alpha*(1-epsilon_alpha); %3-D lift curve total slope for wing and tail (1/rad)
 
-CM_acw = -0.09; %Moment about the AC, (NASA Report) [ft-lbs]
-M_acw_loit = CM_acw*.5*rho_10k*v_loit^2*S_w*chord_w; %Mom. about AC during cruise [-]
+CM_acw = airfoils(af_num, 5); %Moment about the AC, (NASA Report) [-]
+M_acw_loit = CM_acw*.5*rho_10k*v_loit_i^2*S_w*chord_w; %Mom. about AC during cruise [ft-lbs]
 
 %Find the Incidence angle for loiter
 alpha_loit = (W_i/(.5*rho_10k*v_loit_i^2) - CL_0_tot)/ CL_alpha_tot; %AOA at loiter
 CL_tot_loit = CL_alpha_tot*alpha_loit + CL_0_tot; %Total Lift at loiter
 CM_alpha_tot = -CL_alpha_tot*static_margin_full_i; %CM_alpha
 CM_i = a_t_3d*V_H;
-CL_i = -a_t*(S_ht/S_w);
+CL_i = -a_t_3d*(S_ht/S_w);
 
-i_t_loit = (CM_acw*CL_alpha_tot + CM_alpha_tot*CL_tot_loit)/...
+i_t_loit = -(CM_acw*CL_alpha_tot + CM_alpha_tot*CL_tot_loit)/...
   (CL_alpha_tot*CM_i - CM_alpha_tot*CL_i); %Incidence angle for trim at loiter [rad]
 
 theta_f = acos(2*chord_f/chord_w - 1); %[rad]
@@ -207,41 +232,18 @@ alpha_sl = (W_i./(.5*rho_sl*v_sl.^2) - CL_0_tot)/ CL_alpha_tot; %AOA Vector at S
 alpha_10k = (W_i./(.5*rho_10k*v_10k.^2) - CL_0_tot)/ CL_alpha_tot; %AOA Vector at 10k [rad]
 CL_tot_sl = CL_alpha_tot.*alpha_sl + CL_0_tot; %Total Lift Coeff. vector at SL [-]
 CL_tot_10k = CL_alpha_tot.*alpha_10k + CL_0_tot; %Total Lift Coeff. vector at 10k [-]
-del_e_sl = (CM_0*CL_alpha_tot + CM_alpha_tot.*CL_tot_sl)./...
-    (CL_alpha_tot*CM_del_e - CM_alpha_tot*CL_del_e); % Elevator deflection to trim  at SL [rad]
-del_e_10k = (CM_0*CL_alpha_tot + CM_alpha_tot.*CL_tot_10k)./...
-    (CL_alpha_tot*CM_del_e - CM_alpha_tot*CL_del_e); % Elevator deflection to trim  at SL [rad]
+del_e_sl = -(CM_0 + CM_alpha_tot.*alpha_sl)/(CM_del_e);  % Elevator deflection to trim  at SL [rad]
+del_e_10k = -(CM_0 + CM_alpha_tot.*alpha_10k)/(CM_del_e); % Elevator deflection to trim  at SL [rad]
 CL_w_sl = a_w_3d.*alpha_sl; %Wing Lift coeff. at SL [-]
 CL_w_10k = a_w_3d.*alpha_10k; %Wing Lift coeff. at 10k [-]
 CL_t_sl = a_t_3d.*alpha_sl; %Tail Lift coeff. at SL [-]
 CL_t_10k = a_t_3d.*alpha_10k; %Tail Lift coeff. at 10k [-]
 
-%-------------------------Static Weight Calculations ---------------------%
-%Structure Weight Calculations (Cessna Eqs)
-B = W_i*N*S_w*(1.9*A - 4)/(1 + .11*thicc_w);
-W_wing = 69*(B*10^-6)^.69; %Weight of the wing [lbs]
-W_fuse = .11*W_i; %Weight of the fuselage [lbs]
-W_htail = 1.2*(W_i/3000)^.25*S_ht;  %Weight of Horizontal tail [lbs]
-W_vtail = 1.28*S_vt; %Weight of Vertical tail [lbs]
-W_booms = 2*l_t*pi*((1.375/12)^2 - (1.125/12)^2)*(2/6); %Weight of booms [lbs]
-
-%Fuel Weights
-Fuel_vol = W_fuel/6.01;  %Volume of fuel [gal]
-W_eng_tot = 1.16*W_engine_i; %Total Propulsion sys weight [lbs]
-W_nacelle = .175*P_engine_i;  %Nacelle Weight [lbs]
-W_fuelsys = 1.25*(Fuel_vol);  %Fuel System weight (~1 lb for every gallon) [lbs]
-
-W_tot = W_payload(1) + W_fuel + W_wing + W_fuse + W_htail + W_nacelle +...
-    W_vtail + W_eng_tot + W_fuelsys + W_contsys(1) + W_booms;  %Total aircraft weight [lbs]
-
 %-----------------------------CG/NP/SM Calculations-----------------------%
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
 
 M_acw_stall = CM_acw*.5*rho_10k*v_stall^2*S_w*chord_w; %Mom. about AC during cruise [-]
-M_acw_climb = CM_acw*.5*rho_sl*v_climb^2*S_w*chord_w; %Mom. about AC during cruise [-]
-
-V_H = l_t*S_ht/(chord_w*S_w); %Hor Tail volume ratio [-]
-V_V = l_v*S_vt/(b_w*S_w); %Vert Tail volume ratio [-]
+M_acw_climb = CM_acw*.5*rho_sl*v_climb_i^2*S_w*chord_w; %Mom. about AC during cruise [-]
 
 %From https://ocw.mit.edu/courses/aeronautics-and-astronautics/16-01
 %-unified-engineering-i-ii-iii-iv-fall-2005-spring-2006/systems-labs-06/spl8.pdf
@@ -261,11 +263,11 @@ end
 h_n = h_acw + V_H*(a_t_3d/a_w_3d)*(1-epsilon_alpha); %Neutral point [-]
 
 cg_full = ((L_fuse/2)*W_fuse + (l_t + l_wing - (chord_w*.25) + ... %Take off CG wrt nose [ft]
-    (chord_ht*.25))*(W_htail + W_vtail) + L_fuse*(W_engine + W_nacelle) + ...
-    + l_wing*(W_wing + W_contsys(1)) + l_fueltank*(W_fuel + W_fuelsys) +...
+    (chord_ht*.25))*(W_htail + W_vtail) + L_fuse*(W_engine_i + W_nacelle) + ...
+    + l_wing*(W_wing + W_contsys(1)) + l_fueltank*(W_fuel_i + W_fuelsys) +...
     l_avionics*(W_payload(1)) + (l_t/2 + l_wing - (chord_w*.25))*W_booms)/(W_tot);
 cg_empty = ((L_fuse/2)*W_fuse + (l_t + l_wing - (chord_w*.25) + ... %Take off CG wrt nose [ft]
-    (chord_ht*.25))*(W_htail + W_vtail) + L_fuse*(W_engine + W_nacelle) + ...
+    (chord_ht*.25))*(W_htail + W_vtail) + L_fuse*(W_engine_i + W_nacelle) + ...
     + l_wing*(W_wing + W_contsys(1)) + l_fueltank*(W_fuelsys) +...
     l_avionics*(W_payload(1)) + (l_t/2 + l_wing - (chord_w*.25))*W_booms)/(W_tot);
 
@@ -296,54 +298,54 @@ eta = 1; %ratio of dynamic pressure at tail/dynamic pressure at wing [-]
 %Cm_alphat = -eta*V_H*a_t_3d*(1-epsilon_alpha); %change in AoA moment contribution from tail [1/rad]
 
 %----------------------Other Stability Calculations-----------------------%
-L_w_sl_climb = .5*rho_sl*v_climb^2*CL_climb*S_w; %Lift from wing during climb at sl [lbs]
-L_w_10k_loit = .5*rho_10k*v_loit^2*CL_loit*S_w; %Lift from wing during loiter [lbs]
-L_w_10k_cr = .5*rho_10k*v_cruise^2*CL_cruise*S_w; %Lift from wing during loiter [lbs]
-L_w_10k_stall = .5*rho_10k*v_stall^2*CL_stall*S_w; %Lift from wing during loiter [lbs]
-
-%Moments due to wing about CG [-]
-M_cgw_loit_full = M_acw + L_w_10k_loit*(h_cg_full*chord_w - h_acw*chord_w); %Loiter Full
-M_cgw_cr_full = M_acw + L_w_10k_cr*(h_cg_full*chord_w - h_acw*chord_w); %Cruise Full
-M_cgw_climb_full = M_acw + L_w_sl_climb*(h_cg_full*chord_w - h_acw*chord_w); %Climb Full
-M_cgw_stall_full = M_acw + L_w_10k_stall*(h_cg_full*chord_w - h_acw*chord_w); %Stall Full
-M_cgw_loit_empty = M_acw + L_w_10k_loit*(h_cg_empty*chord_w - h_acw*chord_w); %Loiter Empty
-M_cgw_cr_empty = M_acw + L_w_10k_cr*(h_cg_empty*chord_w - h_acw*chord_w); %Cruise Empty
-M_cgw_stall_empty = M_acw + L_w_10k_stall*(h_cg_empty*chord_w - h_acw*chord_w); %Stall Empty
-
-%Moment coeffs due to wing about CG [-]
-CM_cgw_loit_full = M_cgw_loit_full/(.5*rho_10k*v_loit^2*S_w*chord_w); %Loiter Full
-CM_cgw_cr_full = M_cgw_cr_full/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Cruise Full
-CM_cgw_stall_full = M_cgw_stall_full/(.5*rho_10k*v_stall^2*S_w*chord_w); %Stall Full
-CM_cgw_climb_full = M_cgw_climb_full/(.5*rho_10k*v_climb^2*S_w*chord_w); %Climb Full
-CM_cgw_loit_empty = M_cgw_loit_empty/(.5*rho_10k*v_loit^2*S_w*chord_w); %Loiter Full
-CM_cgw_cr_empty = M_cgw_cr_empty/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Cruise Full
-CM_cgw_stall_empty = M_cgw_stall_empty/(.5*rho_10k*v_stall^2*S_w*chord_w); %Stall Full
-
-CM_alpha_full = CL_alpha*(h_cg_full - h_n);
-CM_alpha_empty = CL_alpha*(h_cg_empty - h_n);
-
-%CM_i = 
-
-%i_t_cr_full = CM_ac
-
-x = 1;
-alpha_t_loit = (1-epsilon_alpha)*alpha_loit - i_t; %Tail Eff. Angle of Attack @ loit [rad]
-alpha_t_cr = (1-epsilon_alpha)*alpha_cr - i_t; %Tail Eff. Angle of Attack @ cruise [rad]
-CL_t_loit = a_t_3d*alpha_t_loit; %Tail coeff. of lift at loiter [-]
-CL_t_cr = a_t_3d*alpha_t_cr; %Tail coeff. of lift at cruise [-]
-CM_cgt_loit = V_H*CL_t_loit; % Moment Coeff. due to tail about CG at loiter [-]
-CM_cgt_cr = V_H*CL_t_cr; % Moment Coeff. due to tail about CG at cruise [-]
-
-CM_0_loit = CM_acw_loit + V_H*a_t_3d*i_t;
-CM_0_cr = CM_acw_cr + V_H*a_t_3d*i_t;
-
-CL_alpha = a_w_3d + a_t_3d*(S_ht/S_w)*(1-epsilon_alpha);
-CM_alpha_cr = CL_alpha*(h_cg_cr - h_n);
-CM_alpha_loit = CL_alpha*(h_cg_loit - h_n);
-CL_0 = -a_t_3d*(S_ht/S_w)*i_t;
-
-CL_q = 2*eta*V_H*CL_alpha*(1-epsilon_alpha); %lift coefficient due to pitch rate
-CM_q = -(l_t/chord_w)*CL_q; %moment coefficient due to pitch rate
+% L_w_sl_climb = .5*rho_sl*v_climb_i^2*CL_climb*S_w; %Lift from wing during climb at sl [lbs]
+% L_w_10k_loit = .5*rho_10k*v_loit^2*CL_loit*S_w; %Lift from wing during loiter [lbs]
+% L_w_10k_cr = .5*rho_10k*v_cruise^2*CL_cruise*S_w; %Lift from wing during loiter [lbs]
+% L_w_10k_stall = .5*rho_10k*v_stall^2*CL_stall*S_w; %Lift from wing during loiter [lbs]
+% 
+% %Moments due to wing about CG [-]
+% M_cgw_loit_full = M_acw + L_w_10k_loit*(h_cg_full*chord_w - h_acw*chord_w); %Loiter Full
+% M_cgw_cr_full = M_acw + L_w_10k_cr*(h_cg_full*chord_w - h_acw*chord_w); %Cruise Full
+% M_cgw_climb_full = M_acw + L_w_sl_climb*(h_cg_full*chord_w - h_acw*chord_w); %Climb Full
+% M_cgw_stall_full = M_acw + L_w_10k_stall*(h_cg_full*chord_w - h_acw*chord_w); %Stall Full
+% M_cgw_loit_empty = M_acw + L_w_10k_loit*(h_cg_empty*chord_w - h_acw*chord_w); %Loiter Empty
+% M_cgw_cr_empty = M_acw + L_w_10k_cr*(h_cg_empty*chord_w - h_acw*chord_w); %Cruise Empty
+% M_cgw_stall_empty = M_acw + L_w_10k_stall*(h_cg_empty*chord_w - h_acw*chord_w); %Stall Empty
+% 
+% %Moment coeffs due to wing about CG [-]
+% CM_cgw_loit_full = M_cgw_loit_full/(.5*rho_10k*v_loit^2*S_w*chord_w); %Loiter Full
+% CM_cgw_cr_full = M_cgw_cr_full/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Cruise Full
+% CM_cgw_stall_full = M_cgw_stall_full/(.5*rho_10k*v_stall^2*S_w*chord_w); %Stall Full
+% CM_cgw_climb_full = M_cgw_climb_full/(.5*rho_10k*v_climb^2*S_w*chord_w); %Climb Full
+% CM_cgw_loit_empty = M_cgw_loit_empty/(.5*rho_10k*v_loit^2*S_w*chord_w); %Loiter Full
+% CM_cgw_cr_empty = M_cgw_cr_empty/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Cruise Full
+% CM_cgw_stall_empty = M_cgw_stall_empty/(.5*rho_10k*v_stall^2*S_w*chord_w); %Stall Full
+% 
+% CM_alpha_full = CL_alpha*(h_cg_full - h_n);
+% CM_alpha_empty = CL_alpha*(h_cg_empty - h_n);
+% 
+% %CM_i = 
+% 
+% %i_t_cr_full = CM_ac
+% 
+% x = 1;
+% alpha_t_loit = (1-epsilon_alpha)*alpha_loit - i_t; %Tail Eff. Angle of Attack @ loit [rad]
+% alpha_t_cr = (1-epsilon_alpha)*alpha_cr - i_t; %Tail Eff. Angle of Attack @ cruise [rad]
+% CL_t_loit = a_t_3d*alpha_t_loit; %Tail coeff. of lift at loiter [-]
+% CL_t_cr = a_t_3d*alpha_t_cr; %Tail coeff. of lift at cruise [-]
+% CM_cgt_loit = V_H*CL_t_loit; % Moment Coeff. due to tail about CG at loiter [-]
+% CM_cgt_cr = V_H*CL_t_cr; % Moment Coeff. due to tail about CG at cruise [-]
+% 
+% CM_0_loit = CM_acw_loit + V_H*a_t_3d*i_t;
+% CM_0_cr = CM_acw_cr + V_H*a_t_3d*i_t;
+% 
+% CL_alpha = a_w_3d + a_t_3d*(S_ht/S_w)*(1-epsilon_alpha);
+% CM_alpha_cr = CL_alpha*(h_cg_cr - h_n);
+% CM_alpha_loit = CL_alpha*(h_cg_loit - h_n);
+% CL_0 = -a_t_3d*(S_ht/S_w)*i_t;
+% 
+% CL_q = 2*eta*V_H*CL_alpha*(1-epsilon_alpha); %lift coefficient due to pitch rate
+% CM_q = -(l_t/chord_w)*CL_q; %moment coefficient due to pitch rate
 
 %------------------------------Drag Calculations--------------------------%
 %This can probably be changed to a function to make it cleaner -> @TODO Later
@@ -352,15 +354,15 @@ K = 1/(pi*A*e);
 M_sl = v_sl/1115;  %Mach number at sl vector
 M_10k = v_10k/1076; %Mach number at 10 vector
  
-Re_sl = v_sl*chord/nu_sl; %Reynolds number vector at sl [-]
-Re_10k = v_10k*chord/nu_10k; %Reynolds number vector at 10k [-]
+Re_sl = v_sl*chord_w/nu_sl; %Reynolds number vector at sl [-]
+Re_10k = v_10k*chord_w/nu_10k; %Reynolds number vector at 10k [-]
 
 C_f_sl = .455./((log10(Re_sl).^2.58).*(1 + 0.144*M_sl.^2).^.65); %Skin Friction Coeff at sl [-]
 C_f_10k = .455./((log10(Re_10k).^2.58).*(1 + 0.144*M_10k.^2).^.65); %Skin Friction Coeff at 10k ft [-]
 
-K_sl = (1 + 0.6*thicc/x_cm + 100*thicc^4)...
+K_sl = (1 + 0.6*thicc_w/x_cm + 100*thicc_w^4)...
     *(1.34*M_sl.^0.18*cos(lam_1_4)^.28); %Form factor vector at SL [-]
-K_10k = (1 + 0.6*thicc/x_cm + 100*thicc^4)...
+K_10k = (1 + 0.6*thicc_w/x_cm + 100*thicc_w^4)...
     *(1.34*M_10k.^0.18*cos(lam_1_4)^.28); %Form factor vector at SL [-]
 
 %Component buildup
@@ -385,14 +387,14 @@ D_para_10k = .5*rho_10k*v_10k.^2*S_w.*CD0_tot_10k; %Parasitic drag at 10k ft [lb
 CD_iw_sl = CL_w_sl.^2*K; %Induced Drag coeff. of wing at sl [-]
 CD_iw_10k = CL_w_10k.^2*K; %Induced Drag coeff of wing at 10k [-]
 
-D_iw_sl = CD_iw_sl.*.5*rho_sl*v_sl.^2*S_w; %Induced Wing drag at sl [lbf]
-D_iw_10k = CD_iw_10k.*.5*rho_10k*v_10k.^2*S_w; %Induced Wing drag at sl [lbf]
+D_iw_sl = CD_iw_sl.*.5*rho_sl.*v_sl.^2*S_w; %Induced Wing drag at sl [lbf]
+D_iw_10k = CD_iw_10k.*.5*rho_10k.*v_10k.^2*S_w; %Induced Wing drag at sl [lbf]
 
 CD_it_sl = CL_t_sl.^2*K; %Induced Drag coeff. of tail at sl [-]
 CD_it_10k = CL_t_10k.^2*K; %Induced Drag coeff of tail at 10k [-]
 
-D_it_sl = CD_it_sl.*.5*rho_sl*v_sl.^2*S_t; %Induced Tail drag at sl [lbf]
-D_it_10k = CD_it_10k.*.5*rho_10k*v_10k.^2*S_t; %Induced Tail drag at sl [lbf]
+D_it_sl = CD_it_sl.*.5*rho_sl.*v_sl.^2*S_ht; %Induced Tail drag at sl [lbf]
+D_it_10k = CD_it_10k.*.5*rho_10k.*v_10k.^2*S_ht; %Induced Tail drag at sl [lbf]
 
 %@TODO: Airofoil Drag -> What is it????
 %CD_af_sl = ??
@@ -450,7 +452,7 @@ if(eng_index)
     c_p_climb = fuelConsumptionRate(P_climb)/(P_climb*3600*550); %Get SFC [ft^-1]
     c_p_climb = c_p_climb*(rho_5k/rho_sl -...
         (1 - (rho_5k/rho_sl))/7.55); % Get SFC, Guess at 5k [ft^-1]
-    W_2 = exp(-c_p_climb*(ceil - h_to)/(eta_p_climb*...
+    W_2 = exp(-c_p_climb*(ceiling - h_to)/(eta_p_climb*...
         (1 - D_tot_sl(ind_climb)/(P_engine*550*v_climb))))*W_i; %Fuel Weight after climb [lbs]
 
     c_p_cruise = fuelConsumptionRate(P_req_10k(ind_cr))...
@@ -488,6 +490,14 @@ if(abs(W_i - W_tot) < W_thresh)
 else
     W_i = W_tot; %Update weight
     Convergence.weight = false;
+end %if abs
+
+%FuelWeight Convergence
+if(abs(W_fuel_i - W_fuel) < W_thresh)
+    Convergence.W_fuel = true;
+else
+    W_fuel_i = W_fuel; %Update weight
+    Convergence.W_fuel = false;
 end %if abs
 
 %Loiter Velocity Convergence
@@ -554,15 +564,16 @@ if(converged)
     break;
 else
     k = k + 1;
+    Validity.converged = false;
 end %if converged
 
 
 end %while
 
 %-----------------------Performance Verification--------------------------%
-
+if(Validity.converged)
 %Assume Landing Fuel Consumption is Negligible, add 1.1 SF
-Wf_climb = exp(-c_p_climb*(ceil - h_to)/(eta_p_climb*...
+Wf_climb = exp(-c_p_climb*(ceiling - h_to)/(eta_p_climb*...
         (1 - D_tot_sl(ind_climb)/(P_engine*550*v_climb))))*W_tot;
 Wf_cr_1 = Wf_climb*(1/exp(R_cruise/2*5280*c_p_cruise...
     /(eta_p_cruise*L_D_cr))); %Fuel after cruise to fire [lbs]
@@ -601,7 +612,16 @@ end
 
 %TODO: Check Total Lift
 
+L_tot_sl = .5*rho_sl*v_sl.^2.*(CL_alpha_tot.*alpha_sl + CL_i.*del_e_sl);
+L_tot_10k = .5*rho_10k*v_10k.^2.*(CL_alpha_tot.*alpha_10k + CL_i.*del_e_10k);
+
+end
+
 %----------------------Check entire design and save-----------------------%
+
+if(abs(i_t_loit*180/pi) > 4)
+    continue;
+end
 
 %Check to see if Validity Struct is good
 Good_design = true;
@@ -856,38 +876,38 @@ fprintf('Done!\n');
 
 %-------------------------FUSELAGE SECTIONS-------------------------------%
 
-%perimeters 1-6 represent mid-point perimeter of sectioned fuselage starting from nose
-perimeter_1=18.89; % mid-section perimeters [in]
-perimeter_2=27.87;
-perimeter_5=25.15;
-perimeter_6=38.72-10.31*1.08;
-wf_1=perimeter_1/(pi); %estimation of average width of each section [in]
-wf_2=perimeter_2/pi;
-wf_5=25.15/pi;
-wf_6=perimeter_6/pi;
-wf_6p=wf_6+0.5*10.31*1.08;
-dx1=4.16; %length of each section, 1-6 (NEEDS TO BE UPDATED) [in]
-dx2=4;
-dx3=4;
-dx4=4;
-dx5=4;
-dx6=4;
-
-xi5=2; %distance from fuselage mid-section 5 to wing T.E. (NEEDS TO BE UPDATED) [in]
-xi6=6; %distance from fuselage mid-section 6 to wing T.E. (NEEDS TO BE UPDATED) [in]
-eps_u1=1.3; %graphically determined upwash for sections 1&2 [1/rad]
-eps_u2=1.5; %graphically determined upwash for sections 1&2 [1/rad]
-eps_u3=0; %sections 3&4 are approximated to have no upwash or downwash [1/rad]
-eps_u4=0;
-eps_u5=(xi5/11.21)*(1-epsilon_alpha); %assumed linear progression in downwash from T.E to tail; estimation of downwash based 
-                                      %on linear model
-eps_u6=(xi6/11.21)*(1-epsilon_alpha);
-
-Cm_alphaf=1/(36.5*S_w*144*11.21)*((wf_1^2)*eps_u1*dx1+(wf_2^2)...
-    *eps_u2*dx2+(wf_5^2)*eps_u5*dx5+(wf_6^6)*eps_u6*dx6); %estimation of contribution of fuselage to moment coeff from change in AoA [1/rad]
-k2_k1=0.6; %graphically determined coefficient to determine zero AoA fuselage contribution to moment
-Cm_0f=((k2_k1)/(36.5*S_w*144*11.21))*((wf_1^2)*dx1+(wf_2^2)...
-    *dx2+(wf_3^2)*dx3+(wf_4^2)*dx4+(wf_5^2)*dx5+(wf_6^2)*wf_6)*alpha_ZL; %estimation of contribution of fuselage to moment coeff at zero AoA [1/rad]
+% %perimeters 1-6 represent mid-point perimeter of sectioned fuselage starting from nose
+% perimeter_1=18.89; % mid-section perimeters [in]
+% perimeter_2=27.87;
+% perimeter_5=25.15;
+% perimeter_6=38.72-10.31*1.08;
+% wf_1=perimeter_1/(pi); %estimation of average width of each section [in]
+% wf_2=perimeter_2/pi;
+% wf_5=25.15/pi;
+% wf_6=perimeter_6/pi;
+% wf_6p=wf_6+0.5*10.31*1.08;
+% dx1=4.16; %length of each section, 1-6 (NEEDS TO BE UPDATED) [in]
+% dx2=4;
+% dx3=4;
+% dx4=4;
+% dx5=4;
+% dx6=4;
+% 
+% xi5=2; %distance from fuselage mid-section 5 to wing T.E. (NEEDS TO BE UPDATED) [in]
+% xi6=6; %distance from fuselage mid-section 6 to wing T.E. (NEEDS TO BE UPDATED) [in]
+% eps_u1=1.3; %graphically determined upwash for sections 1&2 [1/rad]
+% eps_u2=1.5; %graphically determined upwash for sections 1&2 [1/rad]
+% eps_u3=0; %sections 3&4 are approximated to have no upwash or downwash [1/rad]
+% eps_u4=0;
+% eps_u5=(xi5/11.21)*(1-epsilon_alpha); %assumed linear progression in downwash from T.E to tail; estimation of downwash based 
+%                                       %on linear model
+% eps_u6=(xi6/11.21)*(1-epsilon_alpha);
+% 
+% Cm_alphaf=1/(36.5*S_w*144*11.21)*((wf_1^2)*eps_u1*dx1+(wf_2^2)...
+%     *eps_u2*dx2+(wf_5^2)*eps_u5*dx5+(wf_6^6)*eps_u6*dx6); %estimation of contribution of fuselage to moment coeff from change in AoA [1/rad]
+% k2_k1=0.6; %graphically determined coefficient to determine zero AoA fuselage contribution to moment
+% Cm_0f=((k2_k1)/(36.5*S_w*144*11.21))*((wf_1^2)*dx1+(wf_2^2)...
+%     *dx2+(wf_3^2)*dx3+(wf_4^2)*dx4+(wf_5^2)*dx5+(wf_6^2)*wf_6)*alpha_ZL; %estimation of contribution of fuselage to moment coeff at zero AoA [1/rad]
     
 %TODO
 %Why are we having issues with total lift?

@@ -135,10 +135,10 @@ while(k < max_iter)
     P_req_sl = P_req_sl/550;  %Power required @ SL [hp]
     P_av_sl = P_ex + P_req_sl;  %Power required @ SL [hp]
     [P_climb , i_climb] = min(P_av_sl); %Get max value and indice
-    if(i_climb < 41) %Need to be at stall condition
-        i_climb = 41;
-        P_climb = P_av_sl(41);
-    end
+    %if(i_climb < 41) %Need to be at stall condition
+       % i_climb = 41;
+      %  P_climb = P_av_sl(41);
+   % end
     v_climb = v_sl(i_climb); %Velocity of climb [fps]
     
     %Calculate what the minimum power needed is
@@ -257,9 +257,11 @@ alpha_loit = (CL_loit-CL_0_tot)/(CL_alpha_tot); %AoA @ Vloit, 10k ft [rad]
 alpha_cr = (CL_cruise - CL_0_tot)/CL_alpha_tot; %AoA @ Vcruise, 10k ft [rad]
 a_w=CL_alpha; %3-D lift-curve slope, wing [1/rad]
 a_t=CL_alpha*(1-epsilon_alpha); %3-D lift-curve slope, tail [1/rad]
+
 %-----------------------------CG/NP/SM Calculations-----------------------%
 
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
+
 
 theta_f = acos(2*chord_f/chord_w - 1); %[rad]
 tau = 1 - (theta_f - sin(theta_f)) / pi; % Flap effectiveness factor [-]
@@ -267,7 +269,15 @@ M_acw = 0; %Moment about the AC, theoretically 0 [ft-lbs]
 CM_acw_cr = M_acw/(.5*rho_10k*v_cruise^2*S_w*chord_w); %Mom. Coeff about AC during cruise [-]
 CM_acw_loit = M_acw/(.5*rho_10k*v_loit^2*S_w*chord_w); %Mom. Coeff about AC during cruise [-]
 
-V_H = l_t*S_ht/(chord_w*S_w); %Tail volume ratio [-]
+V_H = l_t*S_ht/(chord_w*S_w); %Hor Tail volume ratio [-]
+V_V = l_t*S_vt(
+
+%From
+if(V_H >= 0.3 && V_H <= 0.6)
+    Validity.V_H = true;
+else
+    Validity.V_H = false;
+end
 
 h_n = h_acw + V_H*(a_t/a_w)*(1-epsilon_alpha); %Neutral point [-]
 
@@ -287,14 +297,14 @@ static_margin_full = h_n - h_cg_full; %Static margin at fully loaded [-]
 static_margin_empty = h_n - h_cg_empty; %Static margin at fully loaded [-]
 
 %Check for stability
-%CG must be in front of neutral point
-if(h_cg_full < h_n) 
+%SM must be positive, don't want it too low or high
+if(static_margin_full >= 0.05 && static_margin_full <= 0.15) 
     Validity.CG_cr = true;
 else
     Validity.CG_cr = false;
 end
 
-if(h_cg_empty < h_n)
+if(static_margin_full >= 0.05 && static_margin_full <= 0.15)
     Validity.CG_loit = true;
 else
     Validity.CG_loit = false;

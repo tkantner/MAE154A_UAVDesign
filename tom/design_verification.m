@@ -51,10 +51,10 @@ n_good = 0;
 n_bad = 0;
 
 %Randomly generate designs
-for n = 1:100000
+for n = 1:10000
 
-af_num = ceil(rand*size(airfoils,1));   
- 
+%af_num = ceil(rand*size(airfoils,1));   
+af_num = 2;
 %Randomly Generate a Design
 S_w = 1 + rand*3;  %Wing Surface Area [ft^2]
 b_w = 2 + rand*4;  %Wingspan [ft]
@@ -115,7 +115,7 @@ if(thicc_vt > 0.05)
 else
     S_wet_vt = 2.003*S_vt;
 end
-%Hi tom
+
 %Fuselage - https://onlinelibrary.wiley.com/doi/pdf/10.1002/9781118568101.app1
 S_wet_fuse = pi*D_fuse*(L_fuse - 1.3*D_fuse);
 
@@ -146,12 +146,14 @@ static_margin_full_i = 0.005; %Static Margin Guess [-]
 W_engine_i = 3; %Engine weight guess [lbs]
 P_engine_i = 2; %Engine Power Guess [hp]
 W_fuel_i = 4; %Fuel Weight [lbs]
+i_t_i = -2.5*pi/180;
 
 k = 0;
 max_iter = 50;
 %Thresholds for Convergence
 W_thresh = 0.05; 
 static_margin_full_thresh = 0.01;
+i_t_thresh = 0.05;
 while(k < max_iter) %Let's begin!
 
 %-------------------------Static Weight Calculations ---------------------%
@@ -176,21 +178,14 @@ W_tot = W_payload(1) + W_fuel_i + W_wing + W_fuse + W_htail + W_nacelle +...
 %-----------------------------Airfoil + Lift------------------------------%
 
 %Lift curve slopes are from Cl vs. Alpha graphs for 4412
-a_w = airfoils(af_num, 4);  %2-D Wing lift-curve slope [deg^-1]
-a_w = a_w*180/pi; %2-D Wing lift-curve slope [rad^-1]
+a_w_2d = airfoils(af_num, 4);  %2-D Wing lift-curve slope [deg^-1]
+a_w_2d = a_w_2d*180/pi; %2-D Wing lift-curve slope [rad^-1]
 alpha_ZL = airfoils(af_num, 1); %Zero-lift AoA for NACA 4412 [deg]
 alpha_ZL = alpha_ZL*pi/180; %zero lift AoA for NACA 4412 [rad]
-CL_w0 = -alpha_ZL*a_w;
+CL_w0 = -alpha_ZL*a_w_2d;
 
-cl_NACA1 = airfoils(af_num, 6); %two points on for airfoil cl curve in linear region
-cl_NACA2 = airfoils(af_num, 8);
-alpha_NACA1 = airfoils(af_num, 7); %two points on airfoil cl curve in linear region, alpha [deg]
-alpha_NACA1 = alpha_NACA1*pi/180; %two points on airfoil cl curve in linear region, alpha [rad]
-alpha_NACA2 = airfoils(af_num, 9); %two points on airfoil cl curve in linear region, alpha [deg]
-alpha_NACA2 = alpha_NACA2*pi/180; %two points on cl curve in linear region, alpha [rad]
-
-Cl_alpha = (cl_NACA2-cl_NACA1)/(alpha_NACA2-alpha_NACA1); %2-D lift-curve slope [1/rad]
-Cl_0 = cl_NACA1; %2-d lift-curve slope 
+Cl_alpha = a_w_2d; %2-D lift-curve slope [1/rad]
+Cl_0 = airfoils(af_num, 6); %2-d lift-curve slope 
 
 a_stall = 734.5; %Speed of sound @ 10k feet [mph]
 a_stall = a_stall*5280/3600; %Speed of sound @ 10k feet [fps]
@@ -204,7 +199,7 @@ CL_0_HT = 0; %3-d CL0 for tail (Symmetric) [-]
 CL_0_tot = Cl_0+(S_ht/S_w)*CL_0_HT; %3-d CL total for wing + tail [-]
 epsilon_0 = (2*CL_0_tot)/(pi*A); 
 epsilon_alpha = (2*a_w_3d)/(pi*A); % Downwash efficiency loss [-]
-a_t_3d = CL_alpha*(1-epsilon_alpha); %3-D lift-curve slope, tail [1/rad]
+a_t_3d = CL_alpha; %3-D lift-curve slope, tail [1/rad]
 CL_alpha_tot = CL_alpha +...
     (S_ht/S_w)*CL_alpha*(1-epsilon_alpha); %3-D lift curve total slope for wing and tail (1/rad)
 
@@ -212,7 +207,7 @@ CM_acw = airfoils(af_num, 5); %Moment about the AC, (NASA Report) [-]
 M_acw_loit = CM_acw*.5*rho_10k*v_loit_i^2*S_w*chord_w; %Mom. about AC during cruise [ft-lbs]
 
 %Find the Incidence angle for loiter
-alpha_loit = (W_i/(.5*rho_10k*v_loit_i^2) - CL_0_tot)/ CL_alpha_tot; %AOA at loiter
+alpha_loit = (W_i/(.5*rho_10k*v_loit_i^2*S_w) + (a_t_3d*S_ht/S_w)*i_t_i)/ (a_w_3d + a_t_3d*(S_ht/S_w)*(1-epsilon_alpha)); %AOA at loiter
 CL_tot_loit = CL_alpha_tot*alpha_loit + CL_0_tot; %Total Lift at loiter
 CM_alpha_tot = -CL_alpha_tot*static_margin_full_i; %CM_alpha
 CM_i = a_t_3d*V_H;
@@ -228,8 +223,10 @@ CL_del_e = tau*a_t_3d*(S_ht/S_w);
 CM_del_e = -tau*V_H*a_t_3d;
 
 %Vectors for Lift/Drag Calculations
-alpha_sl = (W_i./(.5*rho_sl*v_sl.^2) - CL_0_tot)/ CL_alpha_tot; %AOA Vector at SL [rad]
-alpha_10k = (W_i./(.5*rho_10k*v_10k.^2) - CL_0_tot)/ CL_alpha_tot; %AOA Vector at 10k [rad]
+alpha_sl = (W_i./(.5*rho_sl*v_sl.^2*S_w) + (a_t_3d*S_ht/S_w)*i_t_i)./...
+    (a_w_3d + a_t_3d*(S_ht/S_w)*(1-epsilon_alpha)); %AOA Vector at SL [rad]
+alpha_10k = (W_i./(.5*rho_10k*v_10k.^2*S_w) + (a_t_3d*S_ht/S_w)*i_t_i)./...
+    (a_w_3d + a_t_3d*(S_ht/S_w)*(1-epsilon_alpha)); %AOA
 CL_tot_sl = CL_alpha_tot.*alpha_sl + CL_0_tot; %Total Lift Coeff. vector at SL [-]
 CL_tot_10k = CL_alpha_tot.*alpha_10k + CL_0_tot; %Total Lift Coeff. vector at 10k [-]
 del_e_sl = -(CM_0 + CM_alpha_tot.*alpha_sl)/(CM_del_e);  % Elevator deflection to trim  at SL [rad]
@@ -397,16 +394,16 @@ D_it_sl = CD_it_sl.*.5*rho_sl.*v_sl.^2*S_ht; %Induced Tail drag at sl [lbf]
 D_it_10k = CD_it_10k.*.5*rho_10k.*v_10k.^2*S_ht; %Induced Tail drag at sl [lbf]
 
 %@TODO: Airofoil Drag -> What is it????
-%CD_af_sl = ??
-%CD_af_10k = ??
-%D_af_sl = ??
-%D_af_10k = ??
+CD_af_sl = airfoils(af_num, 7); %Airfoil Drag coeff.
+CD_af_10k = CD_af_sl;
+D_af_sl = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w;
+D_af_10k = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w;
 
-CD_tot_sl = CD0_tot_sl + CD_iw_sl + CD_it_sl; % + CD_af_sl; %Total Drag coeff at SL [-]
-CD_tot_10k = CD0_tot_10k + CD_iw_10k + CD_it_10k; % + CD_af_10k; %Total Drag coeff at 10k [-]
+CD_tot_sl = CD0_tot_sl + CD_iw_sl + CD_it_sl + CD_af_sl; %Total Drag coeff at SL [-]
+CD_tot_10k = CD0_tot_10k + CD_iw_10k + CD_it_10k + CD_af_10k; %Total Drag coeff at 10k [-]
 
-D_tot_sl = D_para_sl + D_iw_sl + D_it_sl; % + D_af_sl; %Total Drag at SL [lbf]
-D_tot_10k = D_para_10k + D_iw_10k + D_it_10k; % + D_af_10k; %Total Drag at 10k [lbf]
+D_tot_sl = D_para_sl + D_iw_sl + D_it_sl + D_af_sl; %Total Drag at SL [lbf]
+D_tot_10k = D_para_10k + D_iw_10k + D_it_10k + D_af_10k; %Total Drag at 10k [lbf]
 
 %---------------------------Propulsion Calcs------------------------------%
 
@@ -498,6 +495,14 @@ if(abs(W_fuel_i - W_fuel) < W_thresh)
 else
     W_fuel_i = W_fuel; %Update weight
     Convergence.W_fuel = false;
+end %if abs
+
+%FuelWeight Convergence
+if(abs(i_t_i - i_t_loit) < i_t_thresh)
+    Convergence.i_t = true;
+else
+    i_t_i = i_t_loit; %Update weight
+    Convergence.i_t = false;
 end %if abs
 
 %Loiter Velocity Convergence
@@ -612,14 +617,14 @@ end
 
 %TODO: Check Total Lift
 
-L_tot_sl = .5*rho_sl*v_sl.^2.*(CL_alpha_tot.*alpha_sl + CL_i.*del_e_sl);
-L_tot_10k = .5*rho_10k*v_10k.^2.*(CL_alpha_tot.*alpha_10k + CL_i.*del_e_10k);
+L_tot_sl = .5*rho_sl*v_sl.^2.*S_w.*(CL_alpha_tot.*alpha_sl + CL_i.*del_e_sl);
+L_tot_10k = .5*rho_10k*v_10k.^2.*S_w.*(CL_alpha_tot.*alpha_10k + CL_i.*del_e_10k);
 
 end
 
 %----------------------Check entire design and save-----------------------%
 
-if(abs(i_t_loit*180/pi) > 4)
+if(abs(i_t_loit*180/pi) > 4 || ~converged)
     continue;
 end
 

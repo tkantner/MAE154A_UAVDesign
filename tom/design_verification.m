@@ -115,7 +115,7 @@ if(thicc_vt > 0.05)
 else
     S_wet_vt = 2.003*S_vt;
 end
-
+%Hi tom
 %Fuselage - https://onlinelibrary.wiley.com/doi/pdf/10.1002/9781118568101.app1
 S_wet_fuse = pi*D_fuse*(L_fuse - 1.3*D_fuse);
 

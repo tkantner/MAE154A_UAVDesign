@@ -66,7 +66,7 @@ thicc_w = airfoils(af_num,2); %Max chord thickness ratio of wing [-]
 thicc_ht = .12; %Max chord thickness ratio of hor. tail [-]
 thicc_vt = .08; %Max chord thickness ratio of vert. tail [-]
 N = 4;  %Ultimate load factor (fixed) [-]
-L_fuse = b_w*(0.7+.05*rand); %Length of fuselage [ft] (70-75% of wingspan)
+L_fuse = b_w*(0.5+.25*rand); %Length of fuselage [ft] (70-75% of wingspan)
 Wid_fuse = L_fuse*(0.1+0.1*rand);  %Width of fuselage [ft] (10-20% of fuselage length)
 D_fuse = Wid_fuse; %Depth of fuselage [ft] (same as fuselage width)
 l_t = 1.5 + rand*2; %Distance from wing 1/4 MAC to hor tail 1/4 MAC [ft]
@@ -82,7 +82,8 @@ V_V = 0.02; %Vertical Tail Volume Ratio [-]
 S_ht = V_H*chord_w*S_w/l_t; %Horizontal Tail Surface Area [ft^2]
 S_vt = V_V*b_w*S_w/l_v; %Vertical Tail Surface Area [ft^2]
 chord_ht = S_ht/b_h; %Hor. Tail Chord [ft]
-h_cg = .15 + rand*.1; %Center of gravity (full and empty, place fuel tank at CG) [-]
+h_cg_full = .15 + rand*.1; %Center of gravity (full and empty, place fuel tank at CG) [-]
+h_cg_empty = h_cg_full;
 
 %Velocity Vectors
 v_sl = linspace(50,v_max_sl); % Velocity vector at sea level [fps]
@@ -131,6 +132,7 @@ W_engine_i = 3; %Engine weight guess [lbs]
 P_engine_i = 2; %Engine Power Guess [hp]
 W_fuel_i = 4; %Fuel Weight [lbs]
 i_t_i = -2.5*pi/180;
+ind_loit_i = 1;
 
 k = 0;
 max_iter = 50;
@@ -258,16 +260,16 @@ end
 
 h_n = h_acw + V_H*(a_t_3d/a_w_3d)*(1-epsilon_alpha); %Neutral point [-]
 
-static_margin_full = h_n - h_cg;
-static_margin_empty = h_n - h_cg;
+static_margin_full = h_n - h_cg_full;
+static_margin_empty = h_n - h_cg_empty;
 
-if(static_margin_full <= 0.05 && static_margin_full >= 0.15)
+if(static_margin_full >= 0.05 && static_margin_full <= 0.2)
     Validity.cg_full = true;
 else
     Validity.cg_full = false;
 end
 
-if(static_margin_empty <= 0.05 && static_margin_empty >= 0.15)
+if(static_margin_empty >= 0.05 && static_margin_empty <= 0.2)
     Validity.cg_full = true;
 else
     Validity.cg_full = false;
@@ -303,13 +305,14 @@ CL_q = 2*eta*V_H*CL_alpha*(1-epsilon_alpha); %lift coefficient due to pitch rate
 CM_q = -(l_t/chord_w)*CL_q; %moment coefficient due to pitch rate
 
 %Dutch Roll
-B = 5.1; %Blaine factor, stable if > 5
-gamma = B*b_w*CL_tot_10k(ind_loit); %Wing dihedral
+B = 3; %Blaine factor, stable if > 5
+gamma = B*b_w*CL_tot_10k(ind_loit_i); %Wing dihedral
 
 if(gamma >= 0 && gamma <= 8)
     Validity.dihedral = true;
 else
     Validity.dihedral = false;
+end
 
 %Roll Control
 if(V_V*B >= .1 && V_V*B <= .2)
@@ -503,14 +506,6 @@ else
     Convergence.v_cruise = false;
 end %if v_cruise
 
-%Static Margin (Full) Convergence
-if(abs(static_margin_full_i - static_margin_full_vec) < static_margin_full_thresh)
-    Convergence.SM_full = true;
-else
-    static_margin_full_i = static_margin_full_vec;
-    Convergence.SM_full = false;
-end %if abs(static...
-
 %Engine Weight Convergence
 if(W_engine_i == W_engine) %Discrete
     Convergence.W_engine = true;
@@ -525,6 +520,13 @@ if(P_engine_i == P_engine) %Discrete
 else
     P_engine_i = P_engine;
     Convergence.P_engine = false;
+end %if W_engine_i
+
+if(ind_loit_i == ind_loit) %Discrete
+    Convergence.ind_loit = true;
+else
+    ind_loit_i = ind_loit;
+    Convergence.ind_loit = false;
 end %if W_engine_i
 
 %Check to see if all converged
@@ -620,6 +622,14 @@ if(~converged)
     continue;
 end
 
+figure(1)
+plot(v_sl, D_af_sl, v_sl, D_it_sl, v_sl, D_para_sl, v_sl, D_iw_sl, v_sl, D_tot_sl);
+legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total');
+
+figure(2)
+plot(v_10k, D_af_10k, v_10k, D_it_10k, v_10k, D_para_10k, v_10k, D_iw_10k, v_10k, D_tot_10k);
+legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total');
+
 %Check to see if Validity Struct is good
 Good_design = true;
 fn = fieldnames(Validity);
@@ -662,9 +672,6 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).chord_f = chord_f; %Flap chord Length [ft]
     Good_designs(n_good).C_m = C_m; %Mean aerodynamic chord [ft]
     Good_designs(n_good).chord_ht = chord_ht; %Hor. Tail chord [ft]
-    Good_designs(n_good).l_wing = l_wing; %Location of wing center from nose [ft]
-    Good_designs(n_good).l_fueltank = l_fueltank; %location fuel tank from nose [ft]
-    Good_designs(n_good).l_avionics = l_avionics; %Location of avionics from nose [ft]
  
 
     %Save the weight breakdown as well
@@ -680,20 +687,13 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).w_control_system = W_contsys(1); %Weight of the control system [lbs]
     
     %Mission stuff
-    Good_designs.(n_good).v_cruise = v_cruise;
-    Good_designs.(n_good).v_loit = v_loit;
-    Good_designs.(n_good).v_climb = v_climb;
-    Good_designs.(n_good).L_D_loit = L_D_loit;
-    Good_designs.(n_good).L_D_cr= L_D_cr;
+    Good_designs(n_good).v_cruise = v_cruise;
+    Good_designs(n_good).v_loit = v_loit;
+    Good_designs(n_good).v_climb = v_climb;
+    Good_designs(n_good).L_D_loit = L_D_loit;
+    Good_designs(n_good).L_D_cr= L_D_cr;
     
     %Airfoil Stuff
-    Good_designs(n_good).CL_tot = CL_tot; %3-D lift coefficient for wing and tail [-]
-    Good_designs(n_good).CL_stall = CL_stall; %CL at Stall condition [-]
-    Good_designs(n_good).CL_loit = CL_loit; %CL @ Vloit, 10k ft
-    Good_designs(n_good).CL_cruise = CL_cruise;
-    Good_designs(n_good).alpha_stall = alpha_stall; %AoA @ Vstall, 10k ft [rad]
-    Good_designs(n_good).alpha_loit = alpha_loit; %AoA @ Vloit, 10k ft [rad]
-    Good_designs(n_good).alpha_cr = alpha_cr; %AoA @ Vcruise, 10k ft [rad]
     
     %CG Stuff
     Good_designs(n_good).tau = tau; % Flap effectiveness factor [-]
@@ -768,10 +768,7 @@ else
     Bad_designs(n_bad).chord_f = chord_f; %Flap chord Length [ft]
     Bad_designs(n_bad).C_m = C_m; %Mean aerodynamic chord [ft]
     Bad_designs(n_bad).chord_ht = chord_ht; %Hor. Tail chord [ft]
-    Bad_designs(n_bad).l_wing = l_wing; %Location of wing center from nose [ft]
-    Bad_designs(n_bad).l_fueltank = l_fueltank; %location fuel tank from nose [ft]
-    Bad_designs(n_bad).l_avionics = l_avionics; %Location of avionics from nose [ft]
- 
+    Bad_designs(n_bad).gamma = gamma;
 
     %Save the weight breakdown as well
     Bad_designs(n_bad).w_payload = W_payload(1);  %Weight of the payload [lbs]
@@ -786,72 +783,66 @@ else
     Bad_designs(n_bad).w_control_system = W_contsys(1); %Weight of the control system [lbs]
     
     %Airfoil Stuff
-    Bad_designs(n_bad).CL_tot = CL_tot; %3-D lift coefficient for wing and tail [-]
-    Bad_designs(n_bad).CL_stall = CL_stall; %CL at Stall condition [-]
-    Bad_designs(n_bad).CL_loit = CL_loit; %CL @ Vloit, 10k ft
-    Bad_designs(n_bad).CL_cruise = CL_cruise;
-    Bad_designs(n_bad).alpha_stall = alpha_stall; %AoA @ Vstall, 10k ft [rad]
-    Bad_designs(n_bad).alpha_loit = alpha_loit; %AoA @ Vloit, 10k ft [rad]
-    Bad_designs(n_bad).alpha_cr = alpha_cr; %AoA @ Vcruise, 10k ft [rad]
+    Bad_Designs(n_bad).airfoil_ind = af_num;
     
     %Mission stuff
-    Bad_designs.(n_bad).v_cruise = v_cruise;
-    Bad_designs.(n_bad).v_loit = v_loit;
-    Bad_designs.(n_bad).v_climb = v_climb;
-    Bad_designs.(n_bad).L_D_loit = L_D_loit;
-    Bad_designs.(n_bad).L_D_cr= L_D_cr;
+    Bad_designs(n_bad).v_cruise = v_cruise;
+    Bad_designs(n_bad).v_loit = v_loit;
+    Bad_designs(n_bad).v_climb = v_climb;
+    Bad_designs(n_bad).L_D_loit = L_D_loit;
+    Bad_designs(n_bad).L_D_cr= L_D_cr;
     
     %CG Stuff
     Bad_designs(n_bad).tau = tau; % Flap effectiveness factor [-]
-    Bad_designs(n_bad).M_acw = M_acw; %Moment about the AC, [ft-lbs] -> HOW TO CALCULATE THIS
-    Bad_designs(n_bad).CM_acw_cr = CM_acw_cr; %Mom. Coeff about AC during cruise [-]
-    Bad_designs(n_bad).CM_acw_loit = CM_acw_loit; %Mom. Coeff about AC during cruise [-]
+    Bad_designs(n_bad).M_acw = M_acw; %Moment about the AC, [ft-lbs]
     Bad_designs(n_bad).V_H = V_H; %Tail volume ratio [-]
     Bad_designs(n_bad).h_n = h_n; %NP wrt LE of wing in prop to chord [-]
-    Bad_designs(n_bad).cg_full = cg_full; %Location of CG from nose [ft]
-    Bad_designs(n_bad).cg_empty = cg_empty; %Location of CG from nose [ft]
-    Bad_designs(n_bad).static_margin_full = static_margin_full_vec; %Static Margin during cruise [-]
+    Bad_designs(n_bad).h_cg_full = h_cg_full; %Location of CG from nose [ft]
+    Bad_designs(n_bad).h_cg_empty = h_cg_empty; %Location of CG from nose [ft]
+    Bad_designs(n_bad).static_margin_full = static_margin_full; %Static Margin during cruise [-]
     Bad_designs(n_bad).static_margin_empty = static_margin_empty; %Static Margin during loiter [-]
-    Bad_designs(n_bad).h_act_cr = h_act_cr; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
-    Bad_designs(n_bad).h_act_loit = h_act_loit; %AC of tail, wrt leading edge of wing, in proportion to chord [-]
     
     %Stability
-    Bad_designs(n_bad).Cm_0t = Cm_0t; %zero AoA moment contribution from tail
-    Bad_designs(n_bad).Cm_alphat = Cm_alphat; %change in AoA moment contribution from tail [1/rad]
-    Bad_designs(n_bad).L_w_10k_loit = L_w_10k_loit; %Lift from wing during loiter [lbs]
-    Bad_designs(n_bad).L_w_10k_cr = L_w_10k_cr; %Lift from wing during loiter [lbs]
-    Bad_designs(n_bad).M_cgw_loit = M_cgw_loit_full; %Loiter
-    Bad_designs(n_bad).M_cgw_cr = M_cgw_cr_full; %Cruise
-    Bad_designs(n_bad).CM_cgw_loit = CM_cgw_loit; %Loiter
-    Bad_designs(n_bad).CM_cgw_cr = CM_cgw_cr; %Cruise
-    Bad_designs(n_bad).alpha_t_loit = alpha_t_loit; %Tail Eff. Angle of Attack @ loit [rad]
-    Bad_designs(n_bad).alpha_t_cr = alpha_t_cr; %Tail Eff. Angle of Attack @ cruise [rad]
-    Bad_designs(n_bad).CL_t_loit = CL_t_loit; %Tail coeff. of lift at loiter [-]
-    Bad_designs(n_bad).CL_t_cr = CL_t_cr; %Tail coeff. of lift at cruise [-]
-    Bad_designs(n_bad).CM_cgt_loit = CM_cgt_loit; % Moment Coeff. due to tail about CG at loiter [-]
-    Bad_designs(n_bad).CM_cgt_cr = CM_cgt_cr; % Moment Coeff. due to tail about CG at cruise [-]
-    Bad_designs(n_bad).CM_0_loit = CM_0_loit;
-    Bad_designs(n_bad).CM_0_cr = CM_0_cr;
-    Bad_designs(n_bad).CL_alpha = CL_alpha;
-    Bad_designs(n_bad).CM_alpha_cr = CM_alpha_cr;
-    Bad_designs(n_bad).CM_alpha_loit = CM_alpha_loit;
-    Bad_designs(n_bad).CL_0 = CL_0;
-    Bad_designs(n_bad).CL_del_e = CL_del_e; 
-    Bad_designs(n_bad).CM_del_e = CM_del_e;
-    Bad_designs(n_bad).delta_e_loit = delta_e_loit; %Elevator to trim [rad?]
-    Bad_designs(n_bad).delta_e_cr = delta_e_cr; %Elevator to trim [rad?]
-    Bad_designs(n_bad).CL_q = CL_q; %lift coefficient due to pitch rate
-    Bad_designs(n_bad).CM_q = CM_q; %moment coefficient due to pitch rate
+%     Bad_designs(n_bad).Cm_0t = Cm_0t; %zero AoA moment contribution from tail
+%     Bad_designs(n_bad).L_w_10k_loit = L_w_10k_loit; %Lift from wing during loiter [lbs]
+%     Bad_designs(n_bad).L_w_10k_cr = L_w_10k_cr; %Lift from wing during loiter [lbs]
+%     Bad_designs(n_bad).M_cgw_loit = M_cgw_loit_full; %Loiter
+%     Bad_designs(n_bad).M_cgw_cr = M_cgw_cr_full; %Cruise
+%     Bad_designs(n_bad).CM_cgw_loit = CM_cgw_loit; %Loiter
+%     Bad_designs(n_bad).CM_cgw_cr = CM_cgw_cr; %Cruise
+%     Bad_designs(n_bad).alpha_t_loit = alpha_t_loit; %Tail Eff. Angle of Attack @ loit [rad]
+%     Bad_designs(n_bad).alpha_t_cr = alpha_t_cr; %Tail Eff. Angle of Attack @ cruise [rad]
+%     Bad_designs(n_bad).CL_t_loit = CL_t_loit; %Tail coeff. of lift at loiter [-]
+%     Bad_designs(n_bad).CL_t_cr = CL_t_cr; %Tail coeff. of lift at cruise [-]
+%     Bad_designs(n_bad).CM_cgt_loit = CM_cgt_loit; % Moment Coeff. due to tail about CG at loiter [-]
+%     Bad_designs(n_bad).CM_cgt_cr = CM_cgt_cr; % Moment Coeff. due to tail about CG at cruise [-]
+%     Bad_designs(n_bad).CM_0_loit = CM_0_loit;
+%     Bad_designs(n_bad).CM_0_cr = CM_0_cr;
+%     Bad_designs(n_bad).CL_alpha = CL_alpha;
+%     Bad_designs(n_bad).CM_alpha_cr = CM_alpha_cr;
+%     Bad_designs(n_bad).CM_alpha_loit = CM_alpha_loit;
+%     Bad_designs(n_bad).CL_0 = CL_0;
+%     Bad_designs(n_bad).CL_del_e = CL_del_e; 
+%     Bad_designs(n_bad).CM_del_e = CM_del_e;
+%     Bad_designs(n_bad).delta_e_loit = delta_e_loit; %Elevator to trim [rad?]
+%     Bad_designs(n_bad).delta_e_cr = delta_e_cr; %Elevator to trim [rad?]
+%     Bad_designs(n_bad).CL_q = CL_q; %lift coefficient due to pitch rate
+%     Bad_designs(n_bad).CM_q = CM_q; %moment coefficient due to pitch rate
     
     %Validity
+    Bad_designs(n_bad).Valid_V_H = Validity.V_H;
+    Bad_designs(n_bad).Valid_V_V = Validity.V_V;
+    Bad_designs(n_bad).Valid_cg_full = Validity.cg_full;
+    Bad_designs(n_bad).Valid_dihedral = Validity.dihedral;
+    Bad_designs(n_bad).Valid_engine = Validity.engine;
+    Bad_designs(n_bad).Valid_converged = Validity.converged;
     Bad_designs(n_bad).Valid_Weight = Validity.Weight;
-    Bad_designs(n_bad).Valid_CG_cr = Validity.CG_cr;
-    Bad_designs(n_bad).Valid_CG_loit = Validity.CG_loit;
-    Bad_designs(n_bad).Valid_lift = Validity.Lift;
     Bad_designs(n_bad).Valid_mission = Validity.mission;
     Bad_designs(n_bad).Valid_RC = Validity.RC;
     Bad_designs(n_bad).Valid_max_10k_speed = Validity.max_10k_speed;
     Bad_designs(n_bad).Valid_max_sl_speed = Validity.max_sl_speed;
+    Bad_designs(n_bad).Valid_Lift_sl = Validity.Lift_sl;
+    Bad_designs(n_bad).Valid_Lift_10k = Validity.Lift_10k;
 end
 
 end %for n = 1

@@ -53,8 +53,8 @@ n_bad = 0;
 %Randomly generate designs
 for n = 1:200
 
-af_num = ceil(rand*size(airfoils,1));   
-%af_num = 2;
+af_num = ceil(rand*size(airfoils,1)); %Aifoil Number
+
 %Randomly Generate a Design
 S_w = 1 + rand*3;  %Wing Surface Area [ft^2]
 A = 6 + rand*4; %Aspect Ratio [-]
@@ -74,16 +74,15 @@ l_v = l_t + rand - rand; %Distance from wing 1/4 MAC to vert tail 1/4 MAC [ft]
 b_h = .5 + rand*.5; %Horizontal tail span [ft]
 b_v = .5 + rand*.5; %Vertical tail span [ft]
 chord_w = S_w/b_w;  %Wing Chord length [ft]
-l_wing = 1 + 2*rand; %Location of wing center from nose [ft]
 chord_f = .1 + .9*rand; %Flap chord Length [ft]
 C_m = S_w/b_w; %Mean aerodynamic chord [ft]
 x_cm = airfoils(af_num, 3);  %Location of max airfoil thickness
-V_H = .45; %Horizontal Tail Volume Ratio [-]
-V_V = 0.03; %Vertical Tail Volume Ratio [-]
+V_H = .3 + rand*.3; %Horizontal Tail Volume Ratio [-]
+V_V = 0.02; %Vertical Tail Volume Ratio [-]
 S_ht = V_H*chord_w*S_w/l_t; %Horizontal Tail Surface Area [ft^2]
 S_vt = V_V*b_w*S_w/l_v; %Vertical Tail Surface Area [ft^2]
 chord_ht = S_ht/b_h; %Hor. Tail Chord [ft]
-l_avionics = .25 + rand*.5; %Location of avionics center from nose [ft]
+h_cg = .15 + rand*.1; %Center of gravity (full and empty, place fuel tank at CG) [-]
 
 %Velocity Vectors
 v_sl = linspace(50,v_max_sl); % Velocity vector at sea level [fps]
@@ -242,9 +241,6 @@ L_t_10k = CL_t_10k.*.5*rho_10k.*v_10k.^2*S_ht; %Tail Lift Vector at SL [-]
 %-----------------------------CG/NP/SM Calculations-----------------------%
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
 
-M_acw_stall = CM_acw*.5*rho_10k*v_stall^2*S_w*chord_w; %Mom. about AC during cruise [-]
-M_acw_climb = CM_acw*.5*rho_sl*v_climb_i^2*S_w*chord_w; %Mom. about AC during cruise [-]
-
 %From https://ocw.mit.edu/courses/aeronautics-and-astronautics/16-01
 %-unified-engineering-i-ii-iii-iv-fall-2005-spring-2006/systems-labs-06/spl8.pdf
 %Check tail volume ratios
@@ -262,72 +258,26 @@ end
 
 h_n = h_acw + V_H*(a_t_3d/a_w_3d)*(1-epsilon_alpha); %Neutral point [-]
 
-static_margin_full_vec = linspace(0.05, 0.2, 16);
-h_cg_full = h_n - static_margin_full_vec;
-cg_full = h_cg_full.*chord_w + l_wing;
+static_margin_full = h_n - h_cg;
+static_margin_empty = h_n - h_cg;
 
-for y = 1:length(static_margin_full_vec)
-syms l_fueltank_sym;
-eq1 = ((L_fuse/2)*W_fuse + (l_t + l_wing - (chord_w*.25) + ... %Take off CG wrt nose [ft]
-    (chord_ht*.25))*(W_htail + W_vtail) + .9*L_fuse*(W_engine_i + W_nacelle) + ...
-    + l_wing*(W_wing + W_contsys(1)) + l_fueltank_sym*(W_fuel_i + W_fuelsys) +...
-    l_avionics*(W_payload(1)) + (l_t/2 + l_wing - (chord_w*.25))*W_booms)/(W_tot);
-
-h_cg_solution_set = vpa(solve(eq1 == cg_full(y), l_fueltank_sym));
-l_fueltank = double(h_cg_solution_set(1));
-
-cg_empty = ((L_fuse/2)*W_fuse + (l_t + l_wing - (chord_w*.25) + ... %Empty CG wrt nose [ft]
-     (chord_ht*.25))*(W_htail + W_vtail) + .8*L_fuse*(W_engine_i + W_nacelle) + ...
-     + l_wing*(W_wing + W_contsys(1)) + l_fueltank*(W_fuelsys) +...
-     l_avionics*(W_payload(1)) + (l_t/2 + l_wing - (chord_w*.25))*W_booms)/(W_tot);
- 
-h_cg_empty = (cg_empty - l_wing)/chord_w;
-static_margin_empty = h_n - h_cg_empty;
-
-%Check for stability
-%SM must be positive, don't want it too low or high
-% if(static_margin_full >= 0.05 && static_margin_full <= 0.2) 
-%     Validity.CG_full = true;
-% else
-%     Validity.CG_full = false;
-%     continue;
-% end
-
-if(static_margin_empty >= 0.05 && static_margin_empty <= 0.2)
-    Validity.CG_empty = true;
+if(static_margin_full <= 0.05 && static_margin_full >= 0.15)
+    Validity.cg_full = true;
 else
-    Validity.CG_empty = false;
-    continue;
+    Validity.cg_full = false;
 end
 
-if(l_fueltank > .25*L_fuse && l_fueltank < .75*L_fuse)
-    Validity.l_fueltank = true;
+if(static_margin_empty <= 0.05 && static_margin_empty >= 0.15)
+    Validity.cg_full = true;
 else
-    Validity.l_fueltank = false;
-    continue;
+    Validity.cg_full = false;
 end
 
-end %for
-
-if(Validity.CG_empty)
-    if(Validity.l_fueltank)
-        static_margin_full = static_margin_full_vec(y);
-    else
-        k = k + 1;
-        continue;
-    end
-else
-    k = k + 1;
-    continue;
-end
-    
-%----------------MOMENT COEFFICIENT INDIVIDUAL COMPONENTS-----------------%
+%----------------------Other Stability Calculations-----------------------%
 
 eta = 1; %ratio of dynamic pressure at tail/dynamic pressure at wing [-]
 Cm_0t = eta*V_H*a_t_3d*(epsilon_0-i_t_loit); %zero AoA moment contribution from tail
 Cm_alpha_t = -eta*V_H*a_t_3d*(1-epsilon_alpha); %change in AoA moment contribution from tail [1/rad]
-
-%----------------------Other Stability Calculations-----------------------%
 
 %Moments due to wing about CG [ft-lbs]
 M_cgw_sl_full = M_acw + L_w_sl.*(h_cg_full*chord_w - h_acw*chord_w); %SL Full
@@ -352,8 +302,25 @@ CM_cg_10k_empty = CM_cgt_10k + CM_cgw_10k_empty;
 CL_q = 2*eta*V_H*CL_alpha*(1-epsilon_alpha); %lift coefficient due to pitch rate
 CM_q = -(l_t/chord_w)*CL_q; %moment coefficient due to pitch rate
 
+%Dutch Roll
+B = 5.1; %Blaine factor, stable if > 5
+gamma = B*b_w*CL_tot_10k(ind_loit); %Wing dihedral
+
+if(gamma >= 0 && gamma <= 8)
+    Validity.dihedral = true;
+else
+    Validity.dihedral = false;
+
+%Roll Control
+if(V_V*B >= .1 && V_V*B <= .2)
+    Validity.roll = true;
+else
+    Validity.roll = false;
+end
+
+
 %------------------------------Drag Calculations--------------------------%
-%This can probably be changed to a function to make it cleaner -> @TODO Later
+
 K = 1/(pi*A*e);
 
 M_sl = v_sl/1115;  %Mach number at sl vector
@@ -401,7 +368,7 @@ CD_it_10k = CL_t_10k.^2*K; %Induced Drag coeff of tail at 10k [-]
 D_it_sl = CD_it_sl.*.5*rho_sl.*v_sl.^2*S_ht; %Induced Tail drag at sl [lbf]
 D_it_10k = CD_it_10k.*.5*rho_10k.*v_10k.^2*S_ht; %Induced Tail drag at sl [lbf]
 
-%Airofoil Drag
+%Airfoil Drag
 CD_af_sl = airfoils(af_num, 7); %Airfoil Drag coeff.
 CD_af_10k = CD_af_sl;
 D_af_sl = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w;
@@ -481,7 +448,6 @@ else %We don't have a good engine, break out of while
     Validity.engine = false;
     break;
 end %if eng_index
-
 
 %------------------------------Convergence Check--------------------------%
 %Weight Convergence
@@ -904,48 +870,12 @@ if(n_bad)
     writetable(struct2table(Bad_designs),'Bad_Designs.xlsx');
 end
 fprintf('Done!\n');
-
-%-------------------------FUSELAGE SECTIONS-------------------------------%
-
-% %perimeters 1-6 represent mid-point perimeter of sectioned fuselage starting from nose
-% perimeter_1=18.89; % mid-section perimeters [in]
-% perimeter_2=27.87;
-% perimeter_5=25.15;
-% perimeter_6=38.72-10.31*1.08;
-% wf_1=perimeter_1/(pi); %estimation of average width of each section [in]
-% wf_2=perimeter_2/pi;
-% wf_5=25.15/pi;
-% wf_6=perimeter_6/pi;
-% wf_6p=wf_6+0.5*10.31*1.08;
-% dx1=4.16; %length of each section, 1-6 (NEEDS TO BE UPDATED) [in]
-% dx2=4;
-% dx3=4;
-% dx4=4;
-% dx5=4;
-% dx6=4;
-% 
-% xi5=2; %distance from fuselage mid-section 5 to wing T.E. (NEEDS TO BE UPDATED) [in]
-% xi6=6; %distance from fuselage mid-section 6 to wing T.E. (NEEDS TO BE UPDATED) [in]
-% eps_u1=1.3; %graphically determined upwash for sections 1&2 [1/rad]
-% eps_u2=1.5; %graphically determined upwash for sections 1&2 [1/rad]
-% eps_u3=0; %sections 3&4 are approximated to have no upwash or downwash [1/rad]
-% eps_u4=0;
-% eps_u5=(xi5/11.21)*(1-epsilon_alpha); %assumed linear progression in downwash from T.E to tail; estimation of downwash based 
-%                                       %on linear model
-% eps_u6=(xi6/11.21)*(1-epsilon_alpha);
-% 
-% Cm_alphaf=1/(36.5*S_w*144*11.21)*((wf_1^2)*eps_u1*dx1+(wf_2^2)...
-%     *eps_u2*dx2+(wf_5^2)*eps_u5*dx5+(wf_6^6)*eps_u6*dx6); %estimation of contribution of fuselage to moment coeff from change in AoA [1/rad]
-% k2_k1=0.6; %graphically determined coefficient to determine zero AoA fuselage contribution to moment
-% Cm_0f=((k2_k1)/(36.5*S_w*144*11.21))*((wf_1^2)*dx1+(wf_2^2)...
-%     *dx2+(wf_3^2)*dx3+(wf_4^2)*dx4+(wf_5^2)*dx5+(wf_6^2)*wf_6)*alpha_ZL; %estimation of contribution of fuselage to moment coeff at zero AoA [1/rad]
     
 %TODO
-%Why are we having issues with total lift?
-%Add stability calculations
-%    - Longitudinal Control
-%    - Directional Control
-%More checks -> How do we show its stable?
+%Longitudinal Control
+%Directional Control
+%Add more airfoils to database
+%Consider adding flaps on takeoff
 %Finish labeling everything and cleaning up code
-%Maybe an exact parasitic drag?
+%Finish adding all the members that we'll save
 %TRIPLE CHECK LITERALLY EVERYTHING

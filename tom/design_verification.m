@@ -23,6 +23,8 @@ mu_10k = 3.534e-7; %Air dynamic viscosity at 10k ft [lb s/ft^2]
 nu_sl = mu_sl/rho_sl; %Air kinematic viscosity at sl [ft^2/s]
 nu_10k = mu_10k/rho_10k; %Air kinematic viscosity at 10k ft [ft^2/s]
 
+g = 32.2; % Acceleration due to gravity [ft/s^2]
+
 %Mission Specs -> used to verify design
 endur = 2; %Endurance [hrs]
 RC = 1500;  %Rate of Climb [fpm]
@@ -563,7 +565,7 @@ else
 end
 
 %Check Rate of climb
-if((P_engine*550 - D_tot_10k(ind_climb)*v_climb) >= RC) %[ft-lbs/s]
+if((P_engine*550 - D_tot_10k(ind_climb)*v_climb) >= RC*W_tot) %[ft-lbs/s]
     Validity.RC = true;
 else
     Validity.RC = false;
@@ -604,11 +606,19 @@ end %for
 
 end %if Validity
 
-%----------------------Check entire design and save-----------------------%
-
 if(~converged)
     continue;
 end
+m = W_tot/g; %Mass of the aircraft [slugs]
+X_u = -.5*rho_10k*v_loit^2*S_w/(m*v_loit)*2*CD0_tot_10k(ind_loit);
+Z_u = -.5*rho_10k*v_loit^2*S_w/(m*v_loit)*2*CL_0_tot;
+
+%Phugoid Mode
+Phu = [ X_u, -g;
+    -Z_u/v_loit, 0];
+Phu_roots = eig(Phu);
+
+%----------------------Check entire design and save-----------------------%
 
 % figure(1)
 % plot(v_sl, D_af_sl, v_sl, D_it_sl, v_sl, D_para_sl, v_sl, D_iw_sl, v_sl, D_tot_sl);
@@ -657,42 +667,38 @@ if(Good_design) %If good, save the design in the struct array
     %Increase number
     n_good = n_good + 1;
     
-%     figure(1)
-% plot(v_sl, D_af_sl, v_sl, D_it_sl, v_sl, D_para_sl, v_sl, D_iw_sl, v_sl, D_tot_sl);
-% legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Location', 'Northwest');
-% xlabel('Velocity [fps]');
-% ylabel('Drag [lbf]');
-% title('Drag at Sea Level');
-% grid on;
-% 
-% figure(2)
-% plot(v_10k, D_af_10k, v_10k, D_it_10k, v_10k, D_para_10k, v_10k, D_iw_10k, v_10k, D_tot_10k);
-% xlabel('Velocity [fps]');
-% ylabel('Drag [lbf]');
-% title('Drag at 10,000 ft');
-% legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Location', 'Northwest');
-% grid on;
-% 
-% figure(3)
-% plot(v_sl, (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w))./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)), v_sl, ...
-%     (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)).^(3/2)./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)));
-% xlabel('Velocity [fps]');
-% title('Lift/Drag Ratios at Sea Level');
-% legend('C_L/C_D', 'C_L^3/2/C_D');
-% grid on;
-% 
-% figure(4)
-% plot(v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w))./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)),...
-%     v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)).^(3/2)./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)));
-% xlabel('Velocity [fps]');
-% title('Lift/Drag Ratios at 10,000 ft');
-% legend('C_L/C_D', 'C_L^3/2/C_D');
-% grid on;
+    figure(1)
+plot(v_sl, D_af_sl, v_sl, D_it_sl, v_sl, D_para_sl, v_sl, D_iw_sl, v_sl, D_tot_sl);
+legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Location', 'Northwest');
+xlabel('Velocity [fps]');
+ylabel('Drag [lbf]');
+title('Drag at Sea Level');
+grid on;
 
-    
-    
-    
-    
+figure(2)
+plot(v_10k, D_af_10k, v_10k, D_it_10k, v_10k, D_para_10k, v_10k, D_iw_10k, v_10k, D_tot_10k);
+xlabel('Velocity [fps]');
+ylabel('Drag [lbf]');
+title('Drag at 10,000 ft');
+legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Location', 'Northwest');
+grid on;
+
+figure(3)
+plot(v_sl, (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w))./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)), v_sl, ...
+    (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)).^(3/2)./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)));
+xlabel('Velocity [fps]');
+title('Lift/Drag Ratios at Sea Level');
+legend('C_L/C_D', 'C_L^3/2/C_D');
+grid on;
+
+figure(4)
+plot(v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w))./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)),...
+    v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)).^(3/2)./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)));
+xlabel('Velocity [fps]');
+title('Lift/Drag Ratios at 10,000 ft');
+legend('C_L/C_D', 'C_L^3/2/C_D');
+grid on;
+
     %Design Parameters
     Good_designs(n_good).weight = W_tot;  %Total weight [lbs]
     Good_designs(n_good).S_w = S_w; %Wing Surface area [ft^2]
@@ -765,6 +771,33 @@ if(Good_design) %If good, save the design in the struct array
     
     %Airfoil Stuff
     Good_designs(n_good).airfoil = af_num;
+    
+    %Stability Derivatives -> All at loiter
+    Good_designs(n_good).CL_0 = CL_0_tot;
+    Good_designs(n_good).CL_alpha = CL_alpha_tot;
+    %Good_designs(n_good).CD_alpha = 
+    %Good_designs(n_good).CD_de = %Trim drag???
+    Good_designs(n_good).CL_q = CL_q;
+    Good_designs(n_good).CL_del_e = CL_del_e;
+    Good_designs(n_good).CD_0 = CD0_tot_10k(ind_loit);
+    %Good_designs(n_good).CD_alpha
+    Good_designs(n_good).CM_0 = CM_0;
+    Good_designs(n_good).CM_alpha = CM_alpha_tot;
+    %Good_designs(n_good).CM_alpha_dot =
+    Good_designs(n_good).CM_q = CM_q;
+    %Good_designs(n_good).CM_dele = 
+    %Good_designs(n_good).CY_beta =
+%     Good_designs(n_good).CY_delr =
+%     Good_designs(n_good).Cl_beta = 
+%     Good_designs(n_good).Cl_P = 
+%     Good_designs(n_good).Cl_r = 
+%     Good_designs(n_good).Cl_da = 
+%     Good_designs(n_good).Cl_dr = 
+%     Good_designs(n_good).Cn_beta = 
+%     Good_designs(n_good).Cn_P =
+%     Good_designs(n_good).Cn_r =
+%     Good_designs(n_good).Cn_da = 
+%     Good_designs(n_good).Cn_dr =
     
 else
     %Increase number

@@ -182,7 +182,7 @@ kk_stall = Cl_alpha/(2*pi); %ratio between 2-d lift curve slope and elliptical l
 CL_alpha = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall)^2+4)); %3-d lift-curve slope for wing ([-]
 a_w_3d = CL_alpha; %3-D lift-curve slope, wing [1/rad]
 a_t_3d = CL_alpha; %3-D lift-curve slope, wing [1/rad]
-CL_0_tot = -a_t_3d*(S_ht/S_w)*i_t_i;
+CL_0_tot = a_t_3d*(S_ht/S_w)*i_t_i;
 epsilon_0 = (2*CL_0_tot)/(pi*A); 
 epsilon_alpha = (2*a_w_3d)/(pi*A); % Downwash efficiency loss [-]
 CL_alpha_tot = a_w_3d +...
@@ -609,6 +609,8 @@ end %if Validity
 if(~converged)
     continue;
 end
+
+%-------------------------Stability Modes---------------------------------%
 m = W_tot/g; %Mass of the aircraft [slugs]
 X_u = -.5*rho_10k*v_loit^2*S_w/(m*v_loit)*2*CD0_tot_10k(ind_loit);
 Z_u = -.5*rho_10k*v_loit^2*S_w/(m*v_loit)*2*CL_0_tot;
@@ -617,6 +619,12 @@ Z_u = -.5*rho_10k*v_loit^2*S_w/(m*v_loit)*2*CL_0_tot;
 Phu = [ X_u, -g;
     -Z_u/v_loit, 0];
 Phu_roots = eig(Phu);
+
+if(real(Phu_roots(1) < 0 && real(Phu_roots(2)) < 0)
+    Validity.Phugoid = true;
+else
+    Validity.Phugoid = false;
+end
 
 %----------------------Check entire design and save-----------------------%
 
@@ -783,7 +791,7 @@ grid on;
     %Good_designs(n_good).CD_alpha
     Good_designs(n_good).CM_0 = CM_0;
     Good_designs(n_good).CM_alpha = CM_alpha_tot;
-    %Good_designs(n_good).CM_alpha_dot =
+    Good_designs(n_good).CM_alpha_dot = -2*eta*(l_t/chord_w)*V_H*a_t_3d*epsilon_alpha;
     Good_designs(n_good).CM_q = CM_q;
     %Good_designs(n_good).CM_dele = 
     %Good_designs(n_good).CY_beta =

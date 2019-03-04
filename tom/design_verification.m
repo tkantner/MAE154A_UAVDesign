@@ -62,7 +62,7 @@ e = 0.7; %Rectangular wing efficiency [-]
 lam_1_4 = rand*15*pi/180; %Wing Quarter chord sweep [rad]
 lam = 1;   %Taper ratio [-]
 thicc_w = airfoils(af_num,2); %Max chord thickness ratio of wing [-]
-thicc_ht = airfoils(af_num, 2); %Max chord thickness ratio of hor. tail [-]
+thicc_ht = airfoils(size(airfoils,1), 2); %Max chord thickness ratio of hor. tail [-]
 thicc_vt = airfoils(size(airfoils,1), 2); %Max chord thickness ratio of vert. tail [-]
 N = 4;  %Ultimate load factor (fixed) [-]
 L_fuse = 3 + .5*rand; %Length of fuselage [ft] (70-75% of wingspan)
@@ -182,10 +182,10 @@ beta_stall = (1-M_stall^2)^0.5; %Correction factor
 
 kk_stall_w = Cl_alpha/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
 CL_alpha_w = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall_w)^2+4)); %3-d lift-curve slope for wing ([-]
-kk_stall_vt = airfoils(size(airfoils, 1), 4)/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
-CL_alpha_vt = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall_vt)^2+4)); %3-d lift-curve slope for wing ([-]
+kk_stall_t = airfoils(size(airfoils, 1), 4)/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
+CL_alpha_t = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall_t)^2+4)); %3-d lift-curve slope for wing ([-]
 a_w_3d = CL_alpha_w; %3-D lift-curve slope, wing [1/rad]
-a_t_3d = CL_alpha_w; %3-D lift-curve slope, tail (assume same as wing) [1/rad]
+a_t_3d = CL_alpha_t; %3-D lift-curve slope, tail (assume same as wing) [1/rad]
 CL_0_tot = a_t_3d*(S_ht/S_w)*i_t_i;
 epsilon_0 = (2*CL_0_tot)/(pi*A); 
 epsilon_alpha = (2*a_w_3d)/(pi*A); % Downwash efficiency loss [-]
@@ -794,15 +794,15 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).CM_alpha_dot = -2*eta*(l_t/chord_w)*V_H*a_t_3d*epsilon_alpha;
     Good_designs(n_good).CM_q = CM_q;
     Good_designs(n_good).CM_dele = CM_del_e;
-    Good_designs(n_good).CY_beta = -(S_vt/S_w)*CL_alpha_vt;
-    Good_designs(n_good).CY_delr = 2*eta*V_V*CL_alpha_vt;
-    Good_designs(n_good).Cl_beta = -eta*((Z_t*S_vt)/(b_w*S_w))*CL_alpha_vt;
+    Good_designs(n_good).CY_beta = -(S_vt/S_w)*CL_alpha_t;
+    Good_designs(n_good).CY_delr = 2*eta*V_V*CL_alpha_t;
+    Good_designs(n_good).Cl_beta = -eta*((Z_t*S_vt)/(b_w*S_w))*CL_alpha_t;
     Good_designs(n_good).Cl_P = -a_w_3d/8;
-    Good_designs(n_good).Cl_r = (CL_0_tot/4) + 2*eta*(Z_t/b_w)*V_V*CL_alpha_vt;
-    Good_designs(n_good).Cn_beta = eta*V_V*CL_alpha_vt - (2*Vol_fuse/(S_w*b_w));
+    Good_designs(n_good).Cl_r = (CL_0_tot/4) + 2*eta*(Z_t/b_w)*V_V*CL_alpha_t;
+    Good_designs(n_good).Cn_beta = eta*V_V*CL_alpha_t - (2*Vol_fuse/(S_w*b_w));
     Good_designs(n_good).Cn_P = - (CL_tot_10k(ind_loit)/8) +...
-        (8/(3*pi))*(b_v/b_w)*V_V*CL_alpha_vt;
-    Good_designs(n_good).Cn_r = (-CD0_tot_10k(ind_loit)/4) - (2*eta*(l_v/b_w)*V_V*CL_alpha_vt);
+        (8/(3*pi))*(b_v/b_w)*V_V*CL_alpha_t;
+    Good_designs(n_good).Cn_r = (-CD0_tot_10k(ind_loit)/4) - (2*eta*(l_v/b_w)*V_V*CL_alpha_t);
 
     
 else

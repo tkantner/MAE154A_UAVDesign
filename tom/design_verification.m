@@ -84,8 +84,31 @@ chord_ht = S_ht/b_h; %Hor. Tail Chord [ft]
 h_cg_full = .15 + rand*.1; %Center of gravity (full and empty, place fuel tank at CG) [-]
 h_cg_empty = h_cg_full;
 Z_t = -rand*(D_fuse/2) + rand*(D_fuse/2); %Height of the tail [ft]
+W_fuel = 2 + rand*5;
 
-%Velocity Vectors
+%Velocity Vectors    %Fuel Calculations
+    c_p_climb = fuelConsumptionRate(P_climb)/(P_climb*3600*550); %Get SFC [ft^-1]
+    c_p_climb = c_p_climb*(rho_5k/rho_sl -...
+        (1 - (rho_5k/rho_sl))/7.55); % Get SFC, Guess at 5k [ft^-1]
+    W_2 = exp(-c_p_climb*(ceiling - h_to)/(eta_p_climb*...
+        (1 - D_tot_sl(ind_climb)/(P_engine*550*v_climb))))*W_i; %Fuel Weight after climb [lbs]
+
+    c_p_cruise = fuelConsumptionRate(P_req_10k(ind_cr))...
+        /(P_req_10k(ind_cr)*3600*550); %Get SFC [ft^-1]
+    c_p_cruise = c_p_cruise*(rho_10k/rho_sl - (1 - (rho_10k/rho_sl))/7.55); %Change for alt [ft^-1]
+    W_3 = exp(-(5280*R_cruise/2)*...
+        c_p_cruise/(L_D_cr*eta_p_cruise))*W_2; %Fuel weight after cruise 1 [lbs]
+
+    c_p_loit = fuelConsumptionRate(P_req_10k(ind_loit))...
+        /(P_req_10k(ind_loit)*3600*550); %Convert units [ft^-1]
+    c_p_loit = c_p_loit*(rho_10k/rho_sl - (1 - (rho_10k/rho_sl))/7.55); %Change for alt [ft^-1]
+    W_4 = ((endur*3600*c_p_loit/(eta_p_loit*CL32_CD_loit*sqrt(2*rho_10k*S_w)))...
+        + 1/sqrt(W_3))^-2; %Fuel after loiter [lbs]
+
+    W_5 = exp(-(5280*R_cruise/2)*...
+        c_p_cruise/(L_D_cr*eta_p_cruise))*W_4; %Fuel weight after cruise 2 [lbs]
+
+    W_fuel = 1.1*(W_i - W_5); %Total Fuel Used (+10%) [lbs]
 v_sl = linspace(50,v_max_sl); % Velocity vector at sea level [fps]
 v_10k = linspace(v_stall, v_max_10k);  %Velocity vector at 10k [fps]
 
@@ -162,7 +185,7 @@ W_eng_tot = 1.16*W_engine_i; %Total Propulsion sys weight [lbs]
 W_nacelle = .175*P_engine_i;  %Nacelle Weight [lbs]
 W_fuelsys = 1.25*(Fuel_vol);  %Fuel System weight (~1 lb for every gallon) [lbs]
 
-W_tot = W_payload(1) + W_fuel_i + W_wing + W_fuse + W_htail + W_nacelle +...
+W_tot = W_payload(1) + W_fuel + W_wing + W_fuse + W_htail + W_nacelle +...
     W_vtail + W_eng_tot + W_fuelsys + W_contsys(1) + W_booms;  %Total aircraft weight [lbs]  
     
 %-----------------------------Airfoil + Lift------------------------------%
@@ -429,30 +452,6 @@ if(eng_index)
     W_engine = engines(eng_index,2); %Weight of the engine [lbs]
     P_engine = engines(eng_index, 1); %Engine power [hp]
 
-    %Fuel Calculations
-    c_p_climb = fuelConsumptionRate(P_climb)/(P_climb*3600*550); %Get SFC [ft^-1]
-    c_p_climb = c_p_climb*(rho_5k/rho_sl -...
-        (1 - (rho_5k/rho_sl))/7.55); % Get SFC, Guess at 5k [ft^-1]
-    W_2 = exp(-c_p_climb*(ceiling - h_to)/(eta_p_climb*...
-        (1 - D_tot_sl(ind_climb)/(P_engine*550*v_climb))))*W_i; %Fuel Weight after climb [lbs]
-
-    c_p_cruise = fuelConsumptionRate(P_req_10k(ind_cr))...
-        /(P_req_10k(ind_cr)*3600*550); %Get SFC [ft^-1]
-    c_p_cruise = c_p_cruise*(rho_10k/rho_sl - (1 - (rho_10k/rho_sl))/7.55); %Change for alt [ft^-1]
-    W_3 = exp(-(5280*R_cruise/2)*...
-        c_p_cruise/(L_D_cr*eta_p_cruise))*W_2; %Fuel weight after cruise 1 [lbs]
-
-    c_p_loit = fuelConsumptionRate(P_req_10k(ind_loit))...
-        /(P_req_10k(ind_loit)*3600*550); %Convert units [ft^-1]
-    c_p_loit = c_p_loit*(rho_10k/rho_sl - (1 - (rho_10k/rho_sl))/7.55); %Change for alt [ft^-1]
-    W_4 = ((endur*3600*c_p_loit/(eta_p_loit*CL32_CD_loit*sqrt(2*rho_10k*S_w)))...
-        + 1/sqrt(W_3))^-2; %Fuel after loiter [lbs]
-
-    W_5 = exp(-(5280*R_cruise/2)*...
-        c_p_cruise/(L_D_cr*eta_p_cruise))*W_4; %Fuel weight after cruise 2 [lbs]
-
-    W_fuel = 1.1*(W_i - W_5); %Total Fuel Used (+10%) [lbs]
-
 else %We don't have a good engine, break out of while
     Validity.engine = false;
     break;
@@ -471,14 +470,6 @@ if(abs(W_i - W_tot) < W_thresh)
 else
     W_i = W_tot; %Update weight
     Convergence.weight = false;
-end %if abs
-
-%FuelWeight Convergence
-if(abs(W_fuel_i - W_fuel) < W_thresh)
-    Convergence.W_fuel = true;
-else
-    W_fuel_i = W_fuel; %Update weight
-    Convergence.W_fuel = false;
 end %if abs
 
 %FuelWeight Convergence
@@ -571,7 +562,8 @@ Wf_cr_2 = Wf_loit*(1/exp(R_cruise/2*c_p_cruise...
     /(eta_p_cruise*L_D_cr))); %Fuel after cruise from fire [lbs]
 
 %Check to see if we have enough fuel for climb, cruise, loiter
-if((W_tot - Wf_cr_2) < W_fuel)
+fuel_margin = W_fuel - (W_tot - Wf_cr_2); %Fuel margin [lbf]
+if(fuel_margin > 0)
     Validity.mission = true;
 else
     Validity.mission = false;
@@ -777,6 +769,7 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).v_climb = v_climb;
     Good_designs(n_good).L_D_loit = L_D_loit;
     Good_designs(n_good).L_D_cr= L_D_cr;
+    Good_designs(n_good).fuel_margin = fuel_margin;
     
     %Airfoil Stuff
     Good_designs(n_good).airfoil = af_num;
@@ -860,6 +853,7 @@ else
     Bad_designs(n_bad).v_climb = v_climb;
     Bad_designs(n_bad).L_D_loit = L_D_loit;
     Bad_designs(n_bad).L_D_cr= L_D_cr;
+    Bad_designs(n_bad).fuel_margin = fuel_margin;
        
     %Validity
     Bad_designs(n_bad).Valid_V_H = Validity.V_H;

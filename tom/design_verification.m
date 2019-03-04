@@ -41,11 +41,9 @@ v_stall = v_stall*5280/3600; %Stall speed @ 10k [fps]
 W_max = 300;   %Max weight [lbs]
 W_payload = avionics(size(avionics)); %Weight of the payload [lbs]
 
-%Climb conditions
+%Propulsive Efficiencies
 eta_p_climb = 0.85; %Climb prop .eff [-]
-%Cruise Conditions
 eta_p_cruise = 0.85;  %Cruise Propulsive efficiency [-]
-%Loiter conditions
 eta_p_loit = 0.85;   %Loiter Propulsive efficiency [-]
 
 %Number of Good and Bad Designs
@@ -55,25 +53,24 @@ n_bad = 0;
 %Randomly generate designs
 for n = 1:5000
 
-af_num = ceil(rand*size(airfoils,1)); %Aifoil Number
-
 %Randomly Generate a Design
+af_num = ceil(rand*(size(airfoils,1) - 1)); %Aifoil Number
 S_w = 3 + rand;  %Wing Surface Area [ft^2]
 A = 6 + rand*2; %Aspect Ratio [-]
 b_w = sqrt(A*S_w); %Wingspan [ft]
 e = 0.7; %Rectangular wing efficiency [-]
-lam_1_4 = 0; %Wing Quarter chord sweep [rad]
+lam_1_4 = rand*15*pi/180; %Wing Quarter chord sweep [rad]
 lam = 1;   %Taper ratio [-]
 thicc_w = airfoils(af_num,2); %Max chord thickness ratio of wing [-]
-thicc_ht = .12; %Max chord thickness ratio of hor. tail [-]
-thicc_vt = .08; %Max chord thickness ratio of vert. tail [-]
+thicc_ht = airfoils(size(airfoils,1), 2); %Max chord thickness ratio of hor. tail [-]
+thicc_vt = airfoils(size(airfoils,1), 2); %Max chord thickness ratio of vert. tail [-]
 N = 4;  %Ultimate load factor (fixed) [-]
 L_fuse = 3 + .5*rand; %Length of fuselage [ft] (70-75% of wingspan)
 Wid_fuse = L_fuse*(0.1+0.1*rand);  %Width of fuselage [ft] (10-20% of fuselage length)
 D_fuse = Wid_fuse; %Depth of fuselage [ft] (same as fuselage width)
 l_t = 1.75 + rand*1.5; %Distance from wing 1/4 MAC to hor tail 1/4 MAC [ft]
 l_v = l_t + .25*rand - .25*rand; %Distance from wing 1/4 MAC to vert tail 1/4 MAC [ft]
-b_h = .5 + rand*.5; %Horizontal tail span [ft]
+b_h = 2; %Horizontal tail span [ft]
 b_v = .5 + rand*.5; %Vertical tail span [ft]
 chord_w = S_w/b_w;  %Wing Chord length [ft]
 chord_f = .1 + .9*rand; %Flap chord Length [ft]
@@ -86,6 +83,7 @@ S_vt = V_V*b_w*S_w/l_v; %Vertical Tail Surface Area [ft^2]
 chord_ht = S_ht/b_h; %Hor. Tail Chord [ft]
 h_cg_full = .15 + rand*.1; %Center of gravity (full and empty, place fuel tank at CG) [-]
 h_cg_empty = h_cg_full;
+Z_t = -rand*(D_fuse/2) + rand*(D_fuse/2); %Height of the tail [ft]
 
 %Velocity Vectors
 v_sl = linspace(50,v_max_sl); % Velocity vector at sea level [fps]
@@ -114,7 +112,10 @@ else
 end
 
 %Fuselage - https://onlinelibrary.wiley.com/doi/pdf/10.1002/9781118568101.app1
-S_wet_fuse = pi*D_fuse*(L_fuse - 1.3*D_fuse);
+D_bar_fuse = .8*D_fuse; %Average fuselage width, guessing 80%
+S_wet_fuse = pi*D_bar_fuse*(L_fuse - 1.3*D_bar_fuse); %Wetted area of fuselage [ft^2]
+lam_fus = L_fuse/D_bar_fuse; %Fineness ratio
+Vol_fuse = (pi/4)*D_bar_fuse^2*L_fuse*(1 - 2/lam_fus); %Volume of fuselage
 
 if(chord_f > chord_w) %Flap chord can't be bigger than wing chord
     continue;
@@ -145,6 +146,7 @@ i_t_thresh = 0.05;
 while(k < max_iter) %Let's begin!
 
 %-------------------------Static Weight Calculations ---------------------%
+
 %Structure Weight Calculations (Cessna Eqs)
 B = W_i*N*S_w*(1.9*A - 4)/(1 + .11*thicc_w);
 W_wing = 69*(B*10^-6)^.69; %Weight of the wing [lbs]
@@ -178,10 +180,12 @@ a_stall = a_stall*5280/3600; %Speed of sound @ 10k feet [fps]
 M_stall = v_stall/a_stall; %Mach number, vstall @10k (mph/mph)
 beta_stall = (1-M_stall^2)^0.5; %Correction factor
 
-kk_stall = Cl_alpha/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
-CL_alpha = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall)^2+4)); %3-d lift-curve slope for wing ([-]
-a_w_3d = CL_alpha; %3-D lift-curve slope, wing [1/rad]
-a_t_3d = CL_alpha; %3-D lift-curve slope, wing [1/rad]
+kk_stall_w = Cl_alpha/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
+CL_alpha_w = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall_w)^2+4)); %3-d lift-curve slope for wing ([-]
+kk_stall_vt = airfoils(size(airfoils, 1), 4)/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
+CL_alpha_vt = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall_vt)^2+4)); %3-d lift-curve slope for wing ([-]
+a_w_3d = CL_alpha_w; %3-D lift-curve slope, wing [1/rad]
+a_t_3d = CL_alpha_w; %3-D lift-curve slope, tail (assume same as wing) [1/rad]
 CL_0_tot = a_t_3d*(S_ht/S_w)*i_t_i;
 epsilon_0 = (2*CL_0_tot)/(pi*A); 
 epsilon_alpha = (2*a_w_3d)/(pi*A); % Downwash efficiency loss [-]
@@ -237,10 +241,11 @@ L_tot_10k = .5*rho_10k*v_10k.^2.*S_w.*...
     (CL_alpha_tot.*alpha_10k + CL_i.*del_e_10k);  %Total lift at 10k [lbs]
 
 %-----------------------------CG/NP/SM Calculations-----------------------%
+
 h_acw = .25;  %AC of wing, wrt leading edge of wing, in proportion to chord [-]
 
 %From https://ocw.mit.edu/courses/aeronautics-and-astronautics/16-01
-%-unified-engineering-i-ii-iii-iv-fall-2005-spring-2006/systems-labs-06/spl8.pdf
+% -unified-engineering-i-ii-iii-iv-fall-2005-spring-2006/systems-labs-06/spl8.pdf
 %Check tail volume ratios
 if(V_H >= 0.3 && V_H <= 0.6)
     Validity.V_H = true;
@@ -297,7 +302,7 @@ CM_cg_sl_empty = CM_cgt_sl + CM_cgw_sl_empty;
 CM_cg_10k_full = CM_cgt_10k + CM_cgw_10k_full;
 CM_cg_10k_empty = CM_cgt_10k + CM_cgw_10k_empty;
 
-CL_q = 2*eta*V_H*CL_alpha*(1-epsilon_alpha); %lift coefficient due to pitch rate
+CL_q = 2*eta*V_H*CL_alpha_w*(1-epsilon_alpha); %lift coefficient due to pitch rate
 CM_q = -(l_t/chord_w)*CL_q; %moment coefficient due to pitch rate
 
 %Dutch Roll
@@ -316,7 +321,6 @@ if(V_V*B >= .1 && V_V*B <= .2)
 else
     Validity.roll = false;
 end
-
 
 %------------------------------Drag Calculations--------------------------%
 
@@ -373,9 +377,17 @@ CD_af_10k = CD_af_sl;
 D_af_sl = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w;
 D_af_10k = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w;
 
+%Trim Drag
+A_t = b_h^2/S_ht; %Tail Aspect Ratio.
+K_c = 1/(pi*A_t*.7); % [-]
+CD_trim_sl = K_c*((S_ht/S_w)*CL_t_sl).^2; %Trim Drag coeff. at sl [-]
+CD_trim_10k = K_c*((S_ht/S_w)*CL_t_10k).^2; %Trim Drag coeff. at 10k [-]
 
-D_tot_sl = D_para_sl + D_iw_sl + D_it_sl + D_af_sl; %Total Drag at SL [lbf]
-D_tot_10k = D_para_10k + D_iw_10k + D_it_10k + D_af_10k; %Total Drag at 10k [lbf]
+D_trim_sl = .5*rho_sl.*v_sl.^2.*S_ht.*CD_trim_sl; %Trim drag at sl [lbf]
+D_trim_10k = .5*rho_10k.*v_10k.^2.*S_ht.*CD_trim_10k; %Trim drag at 10k [lbf]
+
+D_tot_sl = D_para_sl + D_iw_sl + D_it_sl + D_af_sl + D_trim_sl; %Total Drag at SL [lbf]
+D_tot_10k = D_para_10k + D_iw_10k + D_it_10k + D_af_10k + D_trim_10k; %Total Drag at 10k [lbf]
 
 %---------------------------Propulsion Calcs------------------------------%
 
@@ -447,6 +459,7 @@ else %We don't have a good engine, break out of while
 end %if eng_index
 
 %------------------------------Convergence Check--------------------------%
+
 %Weight Convergence
 if(abs(W_i - W_tot) < W_thresh)
     Convergence.weight = true;
@@ -585,8 +598,8 @@ else
     Validity.max_sl_speed = false;
 end
 
+%Check Total Lift at Sea Level and 10k
 for f =1:length(L_tot_sl)
-    %Check Total Lift
     if(L_tot_sl(f) > W_tot)
         Validity.Lift_sl = true;
     else
@@ -611,54 +624,24 @@ if(~converged)
 end
 
 %-------------------------Stability Modes---------------------------------%
+
 m = W_tot/g; %Mass of the aircraft [slugs]
 X_u = -.5*rho_10k*v_loit^2*S_w/(m*v_loit)*2*CD0_tot_10k(ind_loit);
 Z_u = -.5*rho_10k*v_loit^2*S_w/(m*v_loit)*2*CL_0_tot;
 
 %Phugoid Mode
 Phu = [ X_u, -g;
-    -Z_u/v_loit, 0];
-Phu_roots = eig(Phu);
+    -Z_u/v_loit, 0]; %Matrix
+Phu_roots = eig(Phu); %Get the roots
 
-if(real(Phu_roots(1) < 0 && real(Phu_roots(2)) < 0)
+%If negative real roots, then its stable in phugoid
+if(real(Phu_roots(1)) < 0 && real(Phu_roots(2)) < 0)
     Validity.Phugoid = true;
 else
     Validity.Phugoid = false;
 end
 
 %----------------------Check entire design and save-----------------------%
-
-% figure(1)
-% plot(v_sl, D_af_sl, v_sl, D_it_sl, v_sl, D_para_sl, v_sl, D_iw_sl, v_sl, D_tot_sl);
-% legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Location', 'Northwest');
-% xlabel('Velocity [fps]');
-% ylabel('Drag [lbf]');
-% title('Drag at Sea Level');
-% grid on;
-% 
-% figure(2)
-% plot(v_10k, D_af_10k, v_10k, D_it_10k, v_10k, D_para_10k, v_10k, D_iw_10k, v_10k, D_tot_10k);
-% xlabel('Velocity [fps]');
-% ylabel('Drag [lbf]');
-% title('Drag at 10,000 ft');
-% legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Location', 'Northwest');
-% grid on;
-% 
-% figure(3)
-% plot(v_sl, (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w))./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)), v_sl, ...
-%     (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)).^(3/2)./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)));
-% xlabel('Velocity [fps]');
-% title('Lift/Drag Ratios at Sea Level');
-% legend('C_L/C_D', 'C_L^3/2/C_D');
-% grid on;
-% 
-% figure(4)
-% plot(v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w))./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)),...
-%     v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)).^(3/2)./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)));
-% xlabel('Velocity [fps]');
-% title('Lift/Drag Ratios at 10,000 ft');
-% legend('C_L/C_D', 'C_L^3/2/C_D');
-% grid on;
 
 %Check to see if Validity Struct is good
 Good_design = true;
@@ -675,37 +658,54 @@ if(Good_design) %If good, save the design in the struct array
     %Increase number
     n_good = n_good + 1;
     
-    figure(1)
-plot(v_sl, D_af_sl, v_sl, D_it_sl, v_sl, D_para_sl, v_sl, D_iw_sl, v_sl, D_tot_sl);
-legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Location', 'Northwest');
-xlabel('Velocity [fps]');
-ylabel('Drag [lbf]');
-title('Drag at Sea Level');
-grid on;
-
-figure(2)
-plot(v_10k, D_af_10k, v_10k, D_it_10k, v_10k, D_para_10k, v_10k, D_iw_10k, v_10k, D_tot_10k);
-xlabel('Velocity [fps]');
-ylabel('Drag [lbf]');
-title('Drag at 10,000 ft');
-legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Location', 'Northwest');
-grid on;
-
-figure(3)
-plot(v_sl, (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w))./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)), v_sl, ...
-    (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)).^(3/2)./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)));
-xlabel('Velocity [fps]');
-title('Lift/Drag Ratios at Sea Level');
-legend('C_L/C_D', 'C_L^3/2/C_D');
-grid on;
-
-figure(4)
-plot(v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w))./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)),...
-    v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)).^(3/2)./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)));
-xlabel('Velocity [fps]');
-title('Lift/Drag Ratios at 10,000 ft');
-legend('C_L/C_D', 'C_L^3/2/C_D');
-grid on;
+%Plotting for sanity Checks -> Everything Appears to be normal
+% figure(1)
+% plot(v_sl, D_af_sl, v_sl, D_it_sl, v_sl, D_para_sl, v_sl, D_iw_sl, v_sl, D_tot_sl, v_sl, D_trim_sl);
+% legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Trim', 'Location', 'Northwest');
+% xlabel('Velocity [fps]');
+% ylabel('Drag [lbf]');
+% title('Drag at Sea Level');
+% grid on;
+% 
+% figure(2)
+% plot(v_10k, D_af_10k, v_10k, D_it_10k, v_10k, D_para_10k, v_10k, D_iw_10k, v_10k, D_tot_10k, v_10k, D_trim_10k);
+% xlabel('Velocity [fps]');
+% ylabel('Drag [lbf]');
+% title('Drag at 10,000 ft');
+% legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Trim', 'Location', 'Northwest');
+% grid on;
+% 
+% figure(3)
+% plot(v_sl, (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w))./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)), v_sl, ...
+%     (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)).^(3/2)./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)));
+% xlabel('Velocity [fps]');
+% ylabel('Lift/Drag Ratio [-]');
+% title('Lift/Drag Ratios at Sea Level');
+% legend('C_L/C_D', 'C_L^3/2/C_D');
+% grid on;
+% 
+% figure(4)
+% plot(v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w))./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)),...
+%     v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)).^(3/2)./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)));
+% xlabel('Velocity [fps]');
+% ylabel('Lift/Drag Ratio [-]');
+% title('Lift/Drag Ratios at 10,000 ft');
+% legend('C_L/C_D', 'C_L^3/2/C_D');
+% grid on;
+% 
+% figure(5)
+% plot(v_sl, P_engine*550.*ones(1,100), v_sl, D_tot_sl.*v_sl);
+% xlabel('Velocity [fps]');
+% ylabel('Power [ft-lbs/s');
+% legend('Power Available', 'Power Required', 'Location', 'Northwest');
+% grid on;
+% 
+% figure(6)
+% plot(v_10k, P_engine*550.*ones(1,100), v_10k, D_tot_10k.*v_10k);
+% xlabel('Velocity [fps]');
+% ylabel('Power [ft-lbs/s');
+% legend('Power Available', 'Power Required', 'Location', 'Northwest');
+% grid on;
 
     %Design Parameters
     Good_designs(n_good).weight = W_tot;  %Total weight [lbs]
@@ -748,6 +748,7 @@ grid on;
     Good_designs(n_good).i_t = i_t_loit; % [rad]
     Good_designs(n_good).h_n = h_n; %NP wrt LE of wing in prop to chord [-]
     Good_designs(n_good).gamma = gamma; %Dihedral angle [deg]
+    Good_designs(n_good).Z_t = Z_t; %Height of the Tail from CG [ft]
     
     q = 1;
     while(alpha_sl(q)*180/pi > 8)
@@ -756,7 +757,7 @@ grid on;
             break;
         end
     end
-    Good_designs(n_good).v_flaps_needed = v_sl(q);
+    Good_designs(n_good).v_takeoff_needed = v_sl(q);
     
     %Save the weight breakdown as well
     Good_designs(n_good).w_payload = W_payload(1);  %Weight of the payload [lbs]
@@ -783,29 +784,26 @@ grid on;
     %Stability Derivatives -> All at loiter
     Good_designs(n_good).CL_0 = CL_0_tot;
     Good_designs(n_good).CL_alpha = CL_alpha_tot;
-    %Good_designs(n_good).CD_alpha = 
-    %Good_designs(n_good).CD_de = %Trim drag???
+    Good_designs(n_good).CD_alpha = 2*CL_tot_10k(ind_loit)*K*CL_alpha_w;
+    Good_designs(n_good).CD_de = -2*CL_tot_10k(ind_loit)*K*a_t_3d*(S_ht/S_w);
     Good_designs(n_good).CL_q = CL_q;
     Good_designs(n_good).CL_del_e = CL_del_e;
     Good_designs(n_good).CD_0 = CD0_tot_10k(ind_loit);
-    %Good_designs(n_good).CD_alpha
     Good_designs(n_good).CM_0 = CM_0;
     Good_designs(n_good).CM_alpha = CM_alpha_tot;
     Good_designs(n_good).CM_alpha_dot = -2*eta*(l_t/chord_w)*V_H*a_t_3d*epsilon_alpha;
     Good_designs(n_good).CM_q = CM_q;
-    %Good_designs(n_good).CM_dele = 
-    %Good_designs(n_good).CY_beta =
-%     Good_designs(n_good).CY_delr =
-%     Good_designs(n_good).Cl_beta = 
-%     Good_designs(n_good).Cl_P = 
-%     Good_designs(n_good).Cl_r = 
-%     Good_designs(n_good).Cl_da = 
-%     Good_designs(n_good).Cl_dr = 
-%     Good_designs(n_good).Cn_beta = 
-%     Good_designs(n_good).Cn_P =
-%     Good_designs(n_good).Cn_r =
-%     Good_designs(n_good).Cn_da = 
-%     Good_designs(n_good).Cn_dr =
+    Good_designs(n_good).CM_dele = CM_del_e;
+    Good_designs(n_good).CY_beta = -(S_vt/S_w)*CL_alpha_vt;
+    Good_designs(n_good).CY_delr = 2*eta*V_V*CL_alpha_vt;
+    Good_designs(n_good).Cl_beta = -eta*((Z_t*S_vt)/(b_w*S_w))*CL_alpha_vt;
+    Good_designs(n_good).Cl_P = -a_w_3d/8;
+    Good_designs(n_good).Cl_r = (CL_0_tot/4) + 2*eta*(Z_t/b_w)*V_V*CL_alpha_vt;
+    Good_designs(n_good).Cn_beta = eta*V_V*CL_alpha_vt - (2*Vol_fuse/(S_w*b_w));
+    Good_designs(n_good).Cn_P = - (CL_tot_10k(ind_loit)/8) +...
+        (8/(3*pi))*(b_v/b_w)*V_V*CL_alpha_vt;
+    Good_designs(n_good).Cn_r = (-CD0_tot_10k(ind_loit)/4) - (2*eta*(l_v/b_w)*V_V*CL_alpha_vt);
+
     
 else
     %Increase number
@@ -839,6 +837,7 @@ else
     Bad_designs(n_bad).C_m = C_m; %Mean aerodynamic chord [ft]
     Bad_designs(n_bad).chord_ht = chord_ht; %Hor. Tail chord [ft]
     Bad_designs(n_bad).gamma = gamma;
+    Bad_designs(n_bad).Z_t = Z_t; %Height of the Tail from CG [ft]
 
     %Save the weight breakdown as well
     Bad_designs(n_bad).w_payload = W_payload(1);  %Weight of the payload [lbs]
@@ -896,8 +895,5 @@ end
 fprintf('Done!\n');
     
 %TODO
-%Additional Stability Derivatives?
 %Add more airfoils to database
-%Flaps for takeoff
-%Finish labeling everything and cleaning up code
 %TRIPLE CHECK LITERALLY EVERYTHING

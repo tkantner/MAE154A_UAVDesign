@@ -42,9 +42,9 @@ W_max = 300;   %Max weight [lbs]
 W_payload = avionics(size(avionics)); %Weight of the payload [lbs]
 
 %Propulsive Efficiencies
-eta_p_climb = 0.85; %Climb prop .eff [-]
-eta_p_cruise = 0.85;  %Cruise Propulsive efficiency [-]
-eta_p_loit = 0.85;   %Loiter Propulsive efficiency [-]
+eta_p_climb = 0.8; %Climb prop .eff [-]
+eta_p_cruise = 0.8;  %Cruise Propulsive efficiency [-]
+eta_p_loit = 0.8;   %Loiter Propulsive efficiency [-]
 
 %Number of Good and Bad Designs
 n_good = 0;
@@ -86,29 +86,6 @@ h_cg_empty = h_cg_full;
 Z_t = -rand*(D_fuse/2) + rand*(D_fuse/2); %Height of the tail [ft]
 W_fuel = 2 + rand*5;
 
-%Velocity Vectors    %Fuel Calculations
-    c_p_climb = fuelConsumptionRate(P_climb)/(P_climb*3600*550); %Get SFC [ft^-1]
-    c_p_climb = c_p_climb*(rho_5k/rho_sl -...
-        (1 - (rho_5k/rho_sl))/7.55); % Get SFC, Guess at 5k [ft^-1]
-    W_2 = exp(-c_p_climb*(ceiling - h_to)/(eta_p_climb*...
-        (1 - D_tot_sl(ind_climb)/(P_engine*550*v_climb))))*W_i; %Fuel Weight after climb [lbs]
-
-    c_p_cruise = fuelConsumptionRate(P_req_10k(ind_cr))...
-        /(P_req_10k(ind_cr)*3600*550); %Get SFC [ft^-1]
-    c_p_cruise = c_p_cruise*(rho_10k/rho_sl - (1 - (rho_10k/rho_sl))/7.55); %Change for alt [ft^-1]
-    W_3 = exp(-(5280*R_cruise/2)*...
-        c_p_cruise/(L_D_cr*eta_p_cruise))*W_2; %Fuel weight after cruise 1 [lbs]
-
-    c_p_loit = fuelConsumptionRate(P_req_10k(ind_loit))...
-        /(P_req_10k(ind_loit)*3600*550); %Convert units [ft^-1]
-    c_p_loit = c_p_loit*(rho_10k/rho_sl - (1 - (rho_10k/rho_sl))/7.55); %Change for alt [ft^-1]
-    W_4 = ((endur*3600*c_p_loit/(eta_p_loit*CL32_CD_loit*sqrt(2*rho_10k*S_w)))...
-        + 1/sqrt(W_3))^-2; %Fuel after loiter [lbs]
-
-    W_5 = exp(-(5280*R_cruise/2)*...
-        c_p_cruise/(L_D_cr*eta_p_cruise))*W_4; %Fuel weight after cruise 2 [lbs]
-
-    W_fuel = 1.1*(W_i - W_5); %Total Fuel Used (+10%) [lbs]
 v_sl = linspace(50,v_max_sl); % Velocity vector at sea level [fps]
 v_10k = linspace(v_stall, v_max_10k);  %Velocity vector at 10k [fps]
 
@@ -180,7 +157,7 @@ W_booms = 2*l_t*pi*((1.375/12)^2 - (1.125/12)^2)*(2/6); %Weight of booms [lbs]
 W_contsys = controls(size(controls));  %Control sys weight [lbs]
 
 %Fuel Weights
-Fuel_vol = W_fuel_i/6.01;  %Volume of fuel [gal]
+Fuel_vol = W_fuel/6.01;  %Volume of fuel [gal]
 W_eng_tot = 1.16*W_engine_i; %Total Propulsion sys weight [lbs]
 W_nacelle = .175*P_engine_i;  %Nacelle Weight [lbs]
 W_fuelsys = 1.25*(Fuel_vol);  %Fuel System weight (~1 lb for every gallon) [lbs]

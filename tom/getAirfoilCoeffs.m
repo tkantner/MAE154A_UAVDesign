@@ -7,6 +7,6 @@ function CD_airfoil = getAirfoilCoeffs(af_num, alpha, airfoil_drag)
                 break;
             end
         end
-        CD_airfoil(i) = airfoil_drag(af_num, j); %Add it to the vector
+        CD_airfoil(i) = airfoil_drag(af_num + 1, j); %Add it to the vector
     end
 end

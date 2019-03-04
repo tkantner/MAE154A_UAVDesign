@@ -11,7 +11,8 @@ clear; close all; clc;
 engines = xlsread('Engine_Database.xlsx'); %Remember to assort by increasing
 avionics = xlsread('Avionics_Weight_Budget.xlsx');
 controls = xlsread('Control_Weight_Budget.xlsx');
-airfoils = xlsread('Airfoil_Database.xlsx');
+airfoils = xlsread('Airfoil_Database.xlsx', 1);
+airfoil_drag = xlsread('Airfoil_Database.xlsx', 2);
 
 %Physical constants
 rho_10k = 17.56e-4; %Atmos. Density at 10k ft [slugs/ft^3]
@@ -70,7 +71,7 @@ Wid_fuse = L_fuse*(0.1+0.1*rand);  %Width of fuselage [ft] (10-20% of fuselage l
 D_fuse = Wid_fuse; %Depth of fuselage [ft] (same as fuselage width)
 l_t = 1.75 + rand*1.5; %Distance from wing 1/4 MAC to hor tail 1/4 MAC [ft]
 l_v = l_t + .25*rand - .25*rand; %Distance from wing 1/4 MAC to vert tail 1/4 MAC [ft]
-b_h = 2; %Horizontal tail span [ft]
+b_h = .5 + rand*.5; %Horizontal tail span [ft]
 b_v = .5 + rand*.5; %Vertical tail span [ft]
 chord_w = S_w/b_w;  %Wing Chord length [ft]
 chord_f = .1 + .9*rand; %Flap chord Length [ft]
@@ -372,10 +373,10 @@ D_it_sl = CD_it_sl.*.5*rho_sl.*v_sl.^2*S_ht; %Induced Tail drag at sl [lbf]
 D_it_10k = CD_it_10k.*.5*rho_10k.*v_10k.^2*S_ht; %Induced Tail drag at sl [lbf]
 
 %Airfoil Drag
-CD_af_sl = airfoils(af_num, 7); %Airfoil Drag coeff.
-CD_af_10k = CD_af_sl;
-D_af_sl = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w;
-D_af_10k = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w;
+CD_af_sl = getAirfoilCoeffs(af_num, alpha_sl, airfoil_drag); %Get coeff from spreadsheet
+CD_af_10k = getAirfoilCoeffs(af_num, alpha_10k, airfoil_drag); %Get coeff from spreadsheet
+D_af_sl = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w; %Total at SL [lbf]
+D_af_10k = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w; %Total at 10k [lbf]
 
 %Trim Drag
 A_t = b_h^2/S_ht; %Tail Aspect Ratio.

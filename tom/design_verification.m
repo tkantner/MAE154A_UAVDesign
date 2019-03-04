@@ -205,10 +205,10 @@ beta_stall = (1-M_stall^2)^0.5; %Correction factor
 
 kk_stall_w = Cl_alpha/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
 CL_alpha_w = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall_w)^2+4)); %3-d lift-curve slope for wing ([-]
-kk_stall_vt = airfoils(size(airfoils, 1), 4)/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
-CL_alpha_vt = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall_vt)^2+4)); %3-d lift-curve slope for wing ([-]
+kk_stall_t = airfoils(size(airfoils, 1), 4)/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
+CL_alpha_t = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall_t)^2+4)); %3-d lift-curve slope for wing ([-]
 a_w_3d = CL_alpha_w; %3-D lift-curve slope, wing [1/rad]
-a_t_3d = CL_alpha_w; %3-D lift-curve slope, tail (assume same as wing) [1/rad]
+a_t_3d = CL_alpha_t; %3-D lift-curve slope, tail (assume same as wing) [1/rad]
 CL_0_tot = a_t_3d*(S_ht/S_w)*i_t_i;
 epsilon_0 = (2*CL_0_tot)/(pi*A); 
 epsilon_alpha = (2*a_w_3d)/(pi*A); % Downwash efficiency loss [-]
@@ -570,21 +570,24 @@ else
 end
 
 %Check Rate of climb
-if((P_engine*550 - D_tot_10k(ind_climb)*v_climb) >= RC*W_tot) %[ft-lbs/s]
+RC_ac = (P_engine*550*eta_p_climb - D_tot_10k(ind_climb)*v_climb)/W_tot; %Our rate of clmb [fps]
+if( RC_ac >= RC) %[ft/s]
     Validity.RC = true;
 else
     Validity.RC = false;
 end
 
 %Check max speed at 10k feet
-if(P_engine*550 > D_tot_10k(100)*v_max_10k) %[ft-lbs/s]
+v_max_10k_ac = P_engine*550*eta_p_loit/D_tot_10k(length(D_tot_10k)); %Our max speed 10k [fps]
+if( v_max_10k_ac > v_max_10k) %[ft/s]
     Validity.max_10k_speed = true;
 else
     Validity.max_10k_speed = false;
 end
 
 %Check max speed at sl
-if(P_engine*550 > D_tot_sl(100)*v_max_sl) %[ft-lbs/s]
+v_max_sl_ac = P_engine*550*eta_p_loit/D_tot_sl(length(D_tot_sl));
+if(v_max_sl_ac > v_max_sl) %[ft-lbs/s]
     Validity.max_sl_speed = true;
 else
     Validity.max_sl_speed = false;
@@ -686,14 +689,14 @@ if(Good_design) %If good, save the design in the struct array
 % grid on;
 % 
 % figure(5)
-% plot(v_sl, P_engine*550.*ones(1,100), v_sl, D_tot_sl.*v_sl);
+% plot(v_sl, P_engine*550.*ones(1,100)*eta_p_loit, v_sl, D_tot_sl.*v_sl);
 % xlabel('Velocity [fps]');
 % ylabel('Power [ft-lbs/s');
 % legend('Power Available', 'Power Required', 'Location', 'Northwest');
 % grid on;
 % 
 % figure(6)
-% plot(v_10k, P_engine*550.*ones(1,100), v_10k, D_tot_10k.*v_10k);
+% plot(v_10k, P_engine*550.*ones(1,100)*eta_p_loit, v_10k, D_tot_10k.*v_10k);
 % xlabel('Velocity [fps]');
 % ylabel('Power [ft-lbs/s');
 % legend('Power Available', 'Power Required', 'Location', 'Northwest');
@@ -770,6 +773,10 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).L_D_loit = L_D_loit;
     Good_designs(n_good).L_D_cr= L_D_cr;
     Good_designs(n_good).fuel_margin = fuel_margin;
+    Good_designs(n_good).v_max_sl = v_max_sl_ac;
+    Good_designs(n_good).v_max_10k = v_max_10k_ac;
+    Good_designs(n_good).RC = RC_ac;
+
     
     %Airfoil Stuff
     Good_designs(n_good).airfoil = af_num;
@@ -787,15 +794,15 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).CM_alpha_dot = -2*eta*(l_t/chord_w)*V_H*a_t_3d*epsilon_alpha;
     Good_designs(n_good).CM_q = CM_q;
     Good_designs(n_good).CM_dele = CM_del_e;
-    Good_designs(n_good).CY_beta = -(S_vt/S_w)*CL_alpha_vt;
-    Good_designs(n_good).CY_delr = 2*eta*V_V*CL_alpha_vt;
-    Good_designs(n_good).Cl_beta = -eta*((Z_t*S_vt)/(b_w*S_w))*CL_alpha_vt;
+    Good_designs(n_good).CY_beta = -(S_vt/S_w)*CL_alpha_t;
+    Good_designs(n_good).CY_delr = 2*eta*V_V*CL_alpha_t;
+    Good_designs(n_good).Cl_beta = -eta*((Z_t*S_vt)/(b_w*S_w))*CL_alpha_t;
     Good_designs(n_good).Cl_P = -a_w_3d/8;
-    Good_designs(n_good).Cl_r = (CL_0_tot/4) + 2*eta*(Z_t/b_w)*V_V*CL_alpha_vt;
-    Good_designs(n_good).Cn_beta = eta*V_V*CL_alpha_vt - (2*Vol_fuse/(S_w*b_w));
+    Good_designs(n_good).Cl_r = (CL_0_tot/4) + 2*eta*(Z_t/b_w)*V_V*CL_alpha_t;
+    Good_designs(n_good).Cn_beta = eta*V_V*CL_alpha_t - (2*Vol_fuse/(S_w*b_w));
     Good_designs(n_good).Cn_P = - (CL_tot_10k(ind_loit)/8) +...
-        (8/(3*pi))*(b_v/b_w)*V_V*CL_alpha_vt;
-    Good_designs(n_good).Cn_r = (-CD0_tot_10k(ind_loit)/4) - (2*eta*(l_v/b_w)*V_V*CL_alpha_vt);
+        (8/(3*pi))*(b_v/b_w)*V_V*CL_alpha_t;
+    Good_designs(n_good).Cn_r = (-CD0_tot_10k(ind_loit)/4) - (2*eta*(l_v/b_w)*V_V*CL_alpha_t);
 
     
 else
@@ -854,6 +861,9 @@ else
     Bad_designs(n_bad).L_D_loit = L_D_loit;
     Bad_designs(n_bad).L_D_cr= L_D_cr;
     Bad_designs(n_bad).fuel_margin = fuel_margin;
+    Bad_designs(n_bad).v_max_sl = v_max_sl_ac;
+    Bad_designs(n_bad).v_max_10k = v_max_10k_ac;
+    Bad_designs(n_bad).RC = RC_ac;
        
     %Validity
     Bad_designs(n_bad).Valid_V_H = Validity.V_H;

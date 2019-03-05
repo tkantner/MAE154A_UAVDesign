@@ -52,11 +52,12 @@ n_good = 0;
 n_bad = 0;
 
 %Randomly generate designs
-for n = 1:5000
+for n = 1:100000
 
 %Randomly Generate a Design
-af_num = ceil(rand*(size(airfoils,1) - 1)); %Aifoil Number
-S_w = 3 + rand;  %Wing Surface Area [ft^2]
+%af_num = ceil(rand*(size(airfoils,1) - 1)); %Aifoil Number
+af_num = 1;
+S_w = 2 + 4*rand;  %Wing Surface Area [ft^2]
 A = 6 + rand*2; %Aspect Ratio [-]
 b_w = sqrt(A*S_w); %Wingspan [ft]
 e = 0.7; %Rectangular wing efficiency [-]
@@ -66,29 +67,29 @@ thicc_w = airfoils(af_num,2); %Max chord thickness ratio of wing [-]
 thicc_ht = airfoils(size(airfoils,1), 2); %Max chord thickness ratio of hor. tail [-]
 thicc_vt = airfoils(size(airfoils,1), 2); %Max chord thickness ratio of vert. tail [-]
 N = 4;  %Ultimate load factor (fixed) [-]
-L_fuse = 3 + .5*rand; %Length of fuselage [ft] (70-75% of wingspan)
-Wid_fuse = L_fuse*(0.1+0.1*rand);  %Width of fuselage [ft] (10-20% of fuselage length)
+L_fuse = 2.5 + rand; %Length of fuselage [ft] (70-75% of wingspan)
+Wid_fuse = .7 + .3*rand;  %Width of fuselage [ft] (10-20% of fuselage length)
 D_fuse = Wid_fuse; %Depth of fuselage [ft] (same as fuselage width)
-l_t = 1.75 + rand*1.5; %Distance from wing 1/4 MAC to hor tail 1/4 MAC [ft]
-l_v = l_t + .25*rand - .25*rand; %Distance from wing 1/4 MAC to vert tail 1/4 MAC [ft]
-b_h = .5 + rand*.5; %Horizontal tail span [ft]
-b_v = .5 + rand*.5; %Vertical tail span [ft]
+l_t = 2.5 + rand; %Distance from wing 1/4 MAC to hor tail 1/4 MAC [ft]
+l_v = l_t + .2*rand - .2*rand; %Distance from wing 1/4 MAC to vert tail 1/4 MAC [ft]
+b_h = .75 + rand*.5; %Horizontal tail span [ft]
+b_v = .5 + rand*.75; %Vertical tail span [ft]
 chord_w = S_w/b_w;  %Wing Chord length [ft]
-chord_f = .1 + .9*rand; %Flap chord Length [ft]
+chord_e = .2 + rand*.2; %Flap chord Length [ft]
 C_m = S_w/b_w; %Mean aerodynamic chord [ft]
 x_cm = airfoils(af_num, 3);  %Location of max airfoil thickness
-V_H = .3 + rand*.3; %Horizontal Tail Volume Ratio [-]
-V_V = 0.02 + rand*.03; %Vertical Tail Volume Ratio [-]
+V_H = .4 + rand*.55; %Horizontal Tail Volume Ratio [-]
+V_V = 0.03 + rand*.02; %Vertical Tail Volume Ratio [-]
 S_ht = V_H*chord_w*S_w/l_t; %Horizontal Tail Surface Area [ft^2]
 S_vt = V_V*b_w*S_w/l_v; %Vertical Tail Surface Area [ft^2]
 chord_ht = S_ht/b_h; %Hor. Tail Chord [ft]
-h_cg_full = .15 + rand*.1; %Center of gravity (full and empty, place fuel tank at CG) [-]
+h_cg_full = .2 + rand*.05; %Center of gravity (full and empty, place fuel tank at CG) [-]
 h_cg_empty = h_cg_full;
 Z_t = -rand*(D_fuse/2) + rand*(D_fuse/2); %Height of the tail [ft]
-W_fuel = 2 + rand*5;
+W_fuel = 3 + rand;
 
-v_sl = linspace(50,v_max_sl); % Velocity vector at sea level [fps]
-v_10k = linspace(v_stall, v_max_10k);  %Velocity vector at 10k [fps]
+v_sl = linspace(50,v_max_sl, 1000); % Velocity vector at sea level [fps]
+v_10k = linspace(v_stall, v_max_10k, 1000);  %Velocity vector at 10k [fps]
 
 %Wetted Area Estimates [ft^2]
 %Wing -Raymer
@@ -118,7 +119,7 @@ S_wet_fuse = pi*D_bar_fuse*(L_fuse - 1.3*D_bar_fuse); %Wetted area of fuselage [
 lam_fus = L_fuse/D_bar_fuse; %Fineness ratio
 Vol_fuse = (pi/4)*D_bar_fuse^2*L_fuse*(1 - 2/lam_fus); %Volume of fuselage
 
-if(chord_f > chord_w) %Flap chord can't be bigger than wing chord
+if(chord_e > chord_ht) %Flap chord can't be bigger than wing chord
     continue;
 end
 
@@ -171,19 +172,22 @@ W_tot = W_payload(1) + W_fuel + W_wing + W_fuse + W_htail + W_nacelle +...
 %Lift curve slopes are from Cl vs. Alpha graphs for 4412
 a_w_2d = airfoils(af_num, 4);  %2-D Wing lift-curve slope [deg^-1]
 a_w_2d = a_w_2d*180/pi; %2-D Wing lift-curve slope [rad^-1]
+a_t_2d = airfoils(size(airfoils, 1), 4); %2-D Tail lift-curve slope [deg^-1]
+a_t_2d = a_t_2d*180/pi; %2-D Tail lift-curve slope [rad^-1]
 alpha_ZL = airfoils(af_num, 1); %Zero-lift AoA for NACA 4412 [deg]
 alpha_ZL = alpha_ZL*pi/180; %zero lift AoA for NACA 4412 [rad]
 CL_w0 = -alpha_ZL*a_w_2d;
-Cl_alpha = a_w_2d; %2-D lift-curve slope [1/rad]
+Cl_alpha_w = a_w_2d; %2-D lift-curve slope [1/rad]
+Cl_alpha_t = a_t_2d;
 
 a_stall = 734.5; %Speed of sound @ 10k feet [mph]
 a_stall = a_stall*5280/3600; %Speed of sound @ 10k feet [fps]
 M_stall = v_stall/a_stall; %Mach number, vstall @10k (mph/mph)
 beta_stall = (1-M_stall^2)^0.5; %Correction factor
 
-kk_stall_w = Cl_alpha/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
+kk_stall_w = Cl_alpha_w/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
 CL_alpha_w = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall_w)^2+4)); %3-d lift-curve slope for wing ([-]
-kk_stall_t = airfoils(size(airfoils, 1), 4)/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
+kk_stall_t = Cl_alpha_t/(2*pi); %ratio between 2-d lift curve slope and elliptical lift distribution
 CL_alpha_t = (2*pi*A)/(2+sqrt(((A*beta_stall)/kk_stall_t)^2+4)); %3-d lift-curve slope for wing ([-]
 a_w_3d = CL_alpha_w; %3-D lift-curve slope, wing [1/rad]
 a_t_3d = CL_alpha_t; %3-D lift-curve slope, tail (assume same as wing) [1/rad]
@@ -199,7 +203,7 @@ M_acw = CM_acw*.5*rho_10k*v_loit_i^2*S_w*chord_w; %Mom. about AC during cruise [
 %Find the Incidence angle for loiter
 alpha_loit = (W_i/(.5*rho_10k*v_loit_i^2*S_w) + ...
     (a_t_3d*S_ht/S_w)*i_t_i)/ (a_w_3d + a_t_3d*(S_ht/S_w)*(1-epsilon_alpha)); %AOA at loiter
-CL_tot_loit = CL_alpha_tot*alpha_loit + CL_0_tot; %Total Lift at loiter
+CL_tot_loit = CL_alpha_tot*alpha_loit + CL_0_tot; %Total Lift Coeff at loiter
 CM_alpha_tot = -CL_alpha_tot*static_margin_full_i; %CM_alpha
 CM_i = a_t_3d*V_H;
 CL_i = -a_t_3d*(S_ht/S_w);
@@ -207,7 +211,7 @@ CL_i = -a_t_3d*(S_ht/S_w);
 i_t_loit = -(CM_acw*CL_alpha_tot + CM_alpha_tot*CL_tot_loit)/...
   (CL_alpha_tot*CM_i - CM_alpha_tot*CL_i); %Incidence angle for trim at loiter [rad]
 
-theta_f = acos(2*chord_f/chord_w - 1); %[rad]
+theta_f = acos(2*chord_e/chord_w - 1); %[rad]
 tau = 1 - (theta_f - sin(theta_f)) / pi; % Flap effectiveness factor [-]
 CM_0 = V_H*i_t_loit*a_t_3d + CM_acw; 
 CL_del_e = tau*a_t_3d*(S_ht/S_w); 
@@ -375,8 +379,8 @@ D_it_10k = CD_it_10k.*.5*rho_10k.*v_10k.^2*S_ht; %Induced Tail drag at sl [lbf]
 %Airfoil Drag
 CD_af_sl = getAirfoilCoeffs(af_num, alpha_sl, airfoil_drag); %Get coeff from spreadsheet
 CD_af_10k = getAirfoilCoeffs(af_num, alpha_10k, airfoil_drag); %Get coeff from spreadsheet
-D_af_sl = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w; %Total at SL [lbf]
-D_af_10k = CD_af_sl*.5*rho_sl.*v_sl.^2*S_w; %Total at 10k [lbf]
+D_af_sl = CD_af_sl*.5*rho_sl.*v_sl.^2*chord_w; %Total at SL [lbf]
+D_af_10k = CD_af_sl*.5*rho_sl.*v_sl.^2*chord_w; %Total at 10k [lbf]
 
 %Trim Drag
 A_t = b_h^2/S_ht; %Tail Aspect Ratio.
@@ -529,7 +533,17 @@ end %while
 %-----------------------Performance Verification--------------------------%
 
 if(Validity.converged)
-%Assume Landing Fuel Consumption is Negligible, add 1.1 SF
+c_p_climb = fuelConsumptionRate(P_climb)/(P_climb*3600*550); %Get SFC [ft^-1]
+c_p_cruise = fuelConsumptionRate(P_req_10k(ind_cr))...
+        /(P_req_10k(ind_cr)*3600*550); %Get SFC [ft^-1]
+c_p_loit = fuelConsumptionRate(P_req_10k(ind_loit))...
+        /(P_req_10k(ind_loit)*3600*550); %Get SFC [ft^-1]
+    
+c_p_climb = c_p_climb*(rho_5k/rho_sl -...
+        (1 - (rho_5k/rho_sl))/7.55); % Get SFC, Guess at 5k [ft^-1]
+c_p_cruise = c_p_cruise*(rho_10k/rho_sl - (1 - (rho_10k/rho_sl))/7.55); %Change for alt [ft^-1]
+c_p_loit = c_p_loit*(rho_10k/rho_sl - (1 - (rho_10k/rho_sl))/7.55); %Change for alt [ft^-1]
+
 Wf_climb = exp(-c_p_climb*(ceiling - h_to)/(eta_p_climb*...
         (1 - D_tot_sl(ind_climb)/(P_engine*550*v_climb))))*W_tot;
 Wf_cr_1 = Wf_climb*(1/exp(R_cruise/2*5280*c_p_cruise...
@@ -589,6 +603,12 @@ for f =1:length(L_tot_10k)
         break;
     end
 end %for
+
+if(abs(i_t_loit*180/pi) < 4)
+    Validity.i_t = true;
+else
+    Validity.i_t = false;
+end
 
 end %if Validity
 
@@ -667,14 +687,14 @@ if(Good_design) %If good, save the design in the struct array
 % grid on;
 % 
 % figure(5)
-% plot(v_sl, P_engine*550.*ones(1,100)*eta_p_loit, v_sl, D_tot_sl.*v_sl);
+% plot(v_sl, P_engine*550.*ones(1,length(v_sl))*eta_p_loit, v_sl, D_tot_sl.*v_sl);
 % xlabel('Velocity [fps]');
 % ylabel('Power [ft-lbs/s');
 % legend('Power Available', 'Power Required', 'Location', 'Northwest');
 % grid on;
 % 
 % figure(6)
-% plot(v_10k, P_engine*550.*ones(1,100)*eta_p_loit, v_10k, D_tot_10k.*v_10k);
+% plot(v_10k, P_engine*550.*ones(1,length(v_10k))*eta_p_loit, v_10k, D_tot_10k.*v_10k);
 % xlabel('Velocity [fps]');
 % ylabel('Power [ft-lbs/s');
 % legend('Power Available', 'Power Required', 'Location', 'Northwest');
@@ -705,13 +725,13 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).Preq_W = P_needed/W_tot;  %Power Loading [hp/lb]
     Good_designs(n_good).P_needed = P_needed;  %Power actually require [hp]
     Good_designs(n_good).chord_w = chord_w;  %Chord length [ft]
-    Good_designs(n_good).chord_f = chord_f; %Flap chord Length [ft]
+    Good_designs(n_good).chord_f = chord_e; %Flap chord Length [ft]
     Good_designs(n_good).C_m = C_m; %Mean aerodynamic chord [ft]
     Good_designs(n_good).chord_ht = chord_ht; %Hor. Tail chord [ft]
     Good_designs(n_good).thicc_ht = thicc_ht; %Max chord thickness ratio of hor. tail [-]
     Good_designs(n_good).thicc_vt = thicc_vt; %Max chord thickness ratio of vert. tail [-]
     Good_designs(n_good).V_H = V_H; %Horizontal Tail Volume Ratio [-]
-    Good_designs(n_good).V_H = V_H; %Vertical Tail Volume Ratio [-]
+    Good_designs(n_good).V_V = V_V; %Vertical Tail Volume Ratio [-]
     Good_designs(n_good).h_cg_full = h_cg_full; %Center of gravity full
     Good_designs(n_good).h_cg_empty = h_cg_empty; %Center of gravity empty
     Good_designs(n_good).static_margin_full = static_margin_full; % [-]
@@ -811,7 +831,7 @@ else
     Bad_designs(n_bad).Preq_W = P_needed/W_tot;  %Power Loading [hp/lb]
     Bad_designs(n_bad).P_needed = P_needed;  %Power actually require [hp]
     Bad_designs(n_bad).chord = chord_w;  %Chord length [ft]
-    Bad_designs(n_bad).chord_f = chord_f; %Flap chord Length [ft]
+    Bad_designs(n_bad).chord_f = chord_e; %Flap chord Length [ft]
     Bad_designs(n_bad).C_m = C_m; %Mean aerodynamic chord [ft]
     Bad_designs(n_bad).chord_ht = chord_ht; %Hor. Tail chord [ft]
     Bad_designs(n_bad).gamma = gamma;
@@ -857,6 +877,7 @@ else
     Bad_designs(n_bad).Valid_max_sl_speed = Validity.max_sl_speed;
     Bad_designs(n_bad).Valid_Lift_sl = Validity.Lift_sl;
     Bad_designs(n_bad).Valid_Lift_10k = Validity.Lift_10k;
+    Bad_designs(n_bad).Valid_i_t = Validity.i_t;
 end
 
 end %for n = 1

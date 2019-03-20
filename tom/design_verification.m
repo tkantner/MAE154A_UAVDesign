@@ -43,81 +43,89 @@ W_max = 300;   %Max weight [lbs]
 W_payload = avionics(size(avionics)); %Weight of the payload [lbs]
 
 %Propulsive Efficiencies
-eta_p_climb = 0.8; %Climb prop .eff [-]
-eta_p_cruise = 0.8;  %Cruise Propulsive efficiency [-]
-eta_p_loit = 0.8;   %Loiter Propulsive efficiency [-]
+eta_p_climb = 0.85; %Climb prop .eff [-]
+eta_p_cruise = 0.78;  %Cruise Propulsive efficiency [-]
+eta_p_loit = 0.84;   %Loiter Propulsive efficiency [-]
+eta_p_max10k = 0.85;
+eta_p_maxsl = 0.86;
 
 %Number of Good and Bad Designs
 n_good = 0;
 n_bad = 0;
 
 %Randomly generate designs
-for n = 1:100000
+for n = 1:1
 
 %Randomly Generate a Design
 %af_num = ceil(rand*(size(airfoils,1) - 1)); %Aifoil Number
 af_num = 1;
-S_w = 2 + 4*rand;  %Wing Surface Area [ft^2]
-A = 6 + rand*2; %Aspect Ratio [-]
-b_w = sqrt(A*S_w); %Wingspan [ft]
+b_w = 3.5; %Wingspan [ft]
+S_w = 2.1;
+A = b_w^2/S_w;
 e = 0.7; %Rectangular wing efficiency [-]
-lam_1_4 = rand*15*pi/180; %Wing Quarter chord sweep [rad]
+lam_1_4 = 0; %Wing Quarter chord sweep [rad]
 lam = 1;   %Taper ratio [-]
 thicc_w = airfoils(af_num,2); %Max chord thickness ratio of wing [-]
 thicc_ht = airfoils(size(airfoils,1), 2); %Max chord thickness ratio of hor. tail [-]
 thicc_vt = airfoils(size(airfoils,1), 2); %Max chord thickness ratio of vert. tail [-]
 N = 4;  %Ultimate load factor (fixed) [-]
-L_fuse = 2.5 + rand; %Length of fuselage [ft] (70-75% of wingspan)
-Wid_fuse = .7 + .3*rand;  %Width of fuselage [ft] (10-20% of fuselage length)
+L_fuse = 3.05; %Length of fuselage [ft] (70-75% of wingspan)
+Wid_fuse = 7/12;  %Width of fuselage [ft] (10-20% of fuselage length)
 D_fuse = Wid_fuse; %Depth of fuselage [ft] (same as fuselage width)
-l_t = 2.5 + rand; %Distance from wing 1/4 MAC to hor tail 1/4 MAC [ft]
-l_v = l_t + .2*rand - .2*rand; %Distance from wing 1/4 MAC to vert tail 1/4 MAC [ft]
-b_h = .75 + rand*.5; %Horizontal tail span [ft]
-b_v = .5 + rand*.75; %Vertical tail span [ft]
+l_t = 2; %Distance from wing 1/4 MAC to hor tail 1/4 MAC [ft]
+l_v = 2; %Distance from wing 1/4 MAC to vert tail 1/4 MAC [ft]
+%b_h = 13/12; %Horizontal tail span [ft]
 chord_w = S_w/b_w;  %Wing Chord length [ft]
-chord_e = .2 + rand*.2; %Flap chord Length [ft]
+chord_e = .1; %Flap chord Length [ft]
 C_m = S_w/b_w; %Mean aerodynamic chord [ft]
 x_cm = airfoils(af_num, 3);  %Location of max airfoil thickness
-V_H = .4 + rand*.55; %Horizontal Tail Volume Ratio [-]
-V_V = 0.03 + rand*.02; %Vertical Tail Volume Ratio [-]
+V_H = .55; %Horizontal Tail Volume Ratio [-]
+V_V = 0.048; %Vertical Tail Volume Ratio [-]
 S_ht = V_H*chord_w*S_w/l_t; %Horizontal Tail Surface Area [ft^2]
 S_vt = V_V*b_w*S_w/l_v; %Vertical Tail Surface Area [ft^2]
-chord_ht = S_ht/b_h; %Hor. Tail Chord [ft]
-h_cg_full = .2 + rand*.05; %Center of gravity (full and empty, place fuel tank at CG) [-]
+chord_ht = .216; %Hor. Tail Chord [ft]
+h_cg_full = .23; %Center of gravity (full and empty, place fuel tank at CG) [-]
+b_v = S_vt/chord_ht;
+b_h = S_ht/chord_ht;
 h_cg_empty = h_cg_full;
-Z_t = -rand*(D_fuse/2) + rand*(D_fuse/2); %Height of the tail [ft]
-W_fuel = 3 + rand;
+Z_t = .2; %Height of the tail [ft]
+W_fuel = 3.3;
 
-v_sl = linspace(50,v_max_sl, 1000); % Velocity vector at sea level [fps]
+v_sl = linspace(91,v_max_sl, 1000); % Velocity vector at sea level [fps]
 v_10k = linspace(v_stall, v_max_10k, 1000);  %Velocity vector at 10k [fps]
 
 %Wetted Area Estimates [ft^2]
 %Wing -Raymer
-if(thicc_w > 0.05)
-    S_wet_w = S_w*(1.977 + 0.52*thicc_w); 
-else
-    S_wet_w = 2.003*S_w;
-end
+% if(thicc_w > 0.05)
+%     S_wet_w = S_w*(1.977 + 0.52*thicc_w); 
+% else
+%     S_wet_w = 2.003*S_w;
+% end
+S_wet_w = 2*318/144;
 
-%Horizontal tail -Raymer
-if(thicc_ht > 0.05)
-    S_wet_ht = S_ht*(1.977 + 0.52*thicc_ht);
-else
-    S_wet_ht = 2.003*S_ht;
-end
+% %Horizontal tail -Raymer
+% if(thicc_ht > 0.05)
+%     S_wet_ht = S_ht*(1.977 + 0.52*thicc_ht);
+% else
+%     S_wet_ht = 2.003*S_ht;
+% end
+S_wet_ht = 103/144;
 
 %Vertical Tail - Raymer
-if(thicc_vt > 0.05)
-    S_wet_vt = S_vt*(1.977 + 0.52*thicc_vt);
-else
-    S_wet_vt = 2.003*S_vt;
-end
+% if(thicc_vt > 0.05)
+%     S_wet_vt = S_vt*(1.977 + 0.52*thicc_vt);
+% else
+%     S_wet_vt = 2.003*S_vt;
+% end
+S_wet_vt = 2*29/144;
 
 %Fuselage - https://onlinelibrary.wiley.com/doi/pdf/10.1002/9781118568101.app1
-D_bar_fuse = .8*D_fuse; %Average fuselage width, guessing 80%
-S_wet_fuse = pi*D_bar_fuse*(L_fuse - 1.3*D_bar_fuse); %Wetted area of fuselage [ft^2]
-lam_fus = L_fuse/D_bar_fuse; %Fineness ratio
-Vol_fuse = (pi/4)*D_bar_fuse^2*L_fuse*(1 - 2/lam_fus); %Volume of fuselage
+% D_bar_fuse = .8*D_fuse; %Average fuselage width, guessing 80%
+% S_wet_fuse = pi*D_bar_fuse*(L_fuse - 1.3*D_bar_fuse); %Wetted area of fuselage [ft^2]
+% lam_fus = L_fuse/D_bar_fuse; %Fineness ratio
+% Vol_fuse = (pi/4)*D_bar_fuse^2*L_fuse*(1 - 2/lam_fus); %Volume of fuselage
+Vol_fuse = 71/12^3;
+S_wet_fuse = 672/144;
 
 if(chord_e > chord_ht) %Flap chord can't be bigger than wing chord
     continue;
@@ -144,7 +152,7 @@ max_iter = 50;
 %Thresholds for Convergence
 W_thresh = 0.05; 
 static_margin_full_thresh = 0.005;
-i_t_thresh = 0.05;
+i_t_thresh = 0.005;
 while(k < max_iter) %Let's begin!
 
 %-------------------------Static Weight Calculations ---------------------%
@@ -243,7 +251,7 @@ L_t_10k = CL_t_10k.*.5*rho_10k.*v_10k.^2*S_ht; %Tail Lift Vector at SL [-]
 L_tot_sl = .5*rho_sl*v_sl.^2.*S_w.*...
     (CL_alpha_tot.*alpha_sl + CL_i.*del_e_sl); %Total Lift at SL [lbs]
 L_tot_10k = .5*rho_10k*v_10k.^2.*S_w.*...
-    (CL_alpha_tot.*alpha_10k + CL_i.*del_e_10k);  %Total lift at 10k [lbs]
+    (CL_alpha_tot.*alpha_10k+ CL_i.*del_e_10k);  %Total lift at 10k [lbs]
 
 %-----------------------------CG/NP/SM Calculations-----------------------%
 
@@ -418,26 +426,26 @@ v_climb = v_sl(ind_climb); %Velocity of climb [fps]
 
 %Calculate what the minimum power needed is
 if(max(P_req_sl) > max(P_req_10k) && max(P_req_sl) > P_climb)
-    P_needed = max(P_req_sl)/eta_p_loit;
+    P_needed = max(P_req_sl)/eta_p_maxsl;
 elseif(max(P_req_10k) > max(P_req_sl) && max(P_req_10k) > P_climb)
-        P_needed = max(P_req_10k)/eta_p_loit;
+        P_needed = max(P_req_10k)/eta_p_max10k;
 else
-    P_needed = P_climb/eta_p_loit;
+    P_needed = P_climb/eta_p_climb;
 end
 
 %Get the index of the engine that we can use
-eng_index = getEngineWeight(P_needed, engines);
+%eng_index = getEngineWeight(P_needed, engines);
 
 %Check to make sure we could get a good engine weight
-if(eng_index)
-    Validity.engine = true;
-    W_engine = engines(eng_index,2); %Weight of the engine [lbs]
-    P_engine = engines(eng_index, 1); %Engine power [hp]
+%if(eng_index)
+   % Validity.engine = true;
+    W_engine = 1.6772; %Weight of the engine [lbs]
+    P_engine = 2.66; %Engine power [hp]
 
-else %We don't have a good engine, break out of while
-    Validity.engine = false;
-    break;
-end %if eng_index
+%else %We don't have a good engine, break out of while
+   % Validity.engine = false;
+   % break;
+%end %if eng_index
 
 %------------------------------Convergence Check--------------------------%
 
@@ -570,7 +578,7 @@ else
 end
 
 %Check max speed at 10k feet
-v_max_10k_ac = P_engine*550*eta_p_loit/D_tot_10k(length(D_tot_10k)); %Our max speed 10k [fps]
+v_max_10k_ac = P_engine*550*eta_p_max10k/D_tot_10k(length(D_tot_10k)); %Our max speed 10k [fps]
 if( v_max_10k_ac > v_max_10k) %[ft/s]
     Validity.max_10k_speed = true;
 else
@@ -578,7 +586,7 @@ else
 end
 
 %Check max speed at sl
-v_max_sl_ac = P_engine*550*eta_p_loit/D_tot_sl(length(D_tot_sl));
+v_max_sl_ac = P_engine*550*eta_p_maxsl/D_tot_sl(length(D_tot_sl));
 if(v_max_sl_ac > v_max_sl) %[ft-lbs/s]
     Validity.max_sl_speed = true;
 else
@@ -634,7 +642,154 @@ else
     Validity.Phugoid = false;
 end
 
+%Short Mode
+I_y = 199.87/144; %From Solidworks
+CM_alpha_dot = -2*eta*(l_t/chord_w)*V_H*a_t_3d*epsilon_alpha;
+Z_w = -.5*rho_10k*v_loit^2*S_w/(m*v_loit)*CL_alpha_tot;
+M_w = .5*rho_10k*v_loit^2*S_w*chord_w/(I_y*v_loit)*CM_alpha_tot;
+M_w_dot = .5*rho_10k*v_loit^2*S_w*chord_w^2/(2*I_y*v_loit^2)*CM_alpha_dot;
+Z_q = -.5*rho_10k*v_loit^2*S_w*chord_w/(2*m*v_loit)*CL_q;
+M_q = .5*rho_10k*v_loit^2*S_w*chord_w^2/(2*I_y*v_loit)*CM_q;
+Short = [Z_w, v_loit;
+         M_w + M_w_dot*Z_w, M_q + M_w_dot*Z_q]; %Matrix
+Short_roots = eig(Short); %Get the roots
+
+%Roll Mode
+Cl_p = -a_w_3d/8;
+I_x = 1314/144;
+L_p = .5*rho_10k*v_loit^2*S_w*b_w^2*Cl_p/(2*I_x*v_loit); %Roll Root
+
+%Spiral Mode
+I_z = 1441/144;
+Cl_beta = -eta*((Z_t*S_vt)/(b_w*S_w))*CL_alpha_t;
+L_beta = .5*rho_10k*v_loit^2*S_w*b_w/(I_x*v_loit)*Cl_beta;
+Cn_beta = eta*V_V*CL_alpha_t - (2*Vol_fuse/(S_w*b_w));
+N_beta = .5*rho_10k*v_loit^2*S_w*b_w/(I_z*v_loit)*Cn_beta;
+Cn_r = (-CD0_tot_10k(ind_loit)/4) - (2*eta*(l_v/b_w)*V_V*CL_alpha_t);
+N_r = .5*rho_10k*v_loit^2*S_w*b_w^2/(2*I_z*v_loit)*Cn_r;
+Cl_r = (CL_0_tot/4) + 2*eta*(Z_t/b_w)*V_V*CL_alpha_t;
+L_r = .5*rho_10k*v_loit^2*S_w*b_w^2/(2*I_x*v_loit)*Cl_r;
+lam_spiral = (L_beta*N_r - L_r*N_beta)/L_beta; %Spiral root
+
+%Dutch Roll Mode
+Cy_beta = -(S_vt/S_w)*CL_alpha_t;
+Y_beta = .5*rho_10k*v_loit^2*S_w/(m*v_loit)*Cy_beta;
+Y_r = 0;
+dutch = [Y_beta/v_loit, -(1 - Y_r/v_loit);
+        N_beta,        N_r]; %Matrix
+dutch_roots = eig(dutch);
+
 %----------------------Check entire design and save-----------------------%
+
+figure(1)
+plot(v_sl, D_af_sl, v_sl, D_it_sl, v_sl, D_para_sl, v_sl, D_iw_sl, v_sl, D_trim_sl, v_sl, D_tot_sl);
+legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Trim', 'Total', 'Location', 'Northwest');
+xlabel('Velocity [fps]');
+ylabel('Drag [lbf]');
+title('Drag at Sea Level');
+grid on;
+
+figure(2)
+plot(v_10k, D_af_10k, v_10k, D_it_10k, v_10k, D_para_10k, v_10k, D_iw_10k, v_10k, D_trim_10k, v_10k, D_tot_10k);
+xlabel('Velocity [fps]');
+ylabel('Drag [lbf]');
+title('Drag at 10,000 ft');
+legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Trim', 'Total', 'Location', 'Northwest');
+grid on;
+
+figure(3)
+plot(v_sl, (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w))./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)), v_sl, ...
+    (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)).^(3/2)./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)));
+xlabel('Velocity [fps]');
+ylabel('Lift/Drag Ratio [-]');
+title('Lift/Drag Ratios at Sea Level');
+legend('C_L/C_D', 'C_L^3/2/C_D');
+grid on;
+
+figure(4)
+plot(v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w))./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)),...
+    v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)).^(3/2)./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)));
+xlabel('Velocity [fps]');
+ylabel('Lift/Drag Ratio [-]');
+title('Lift/Drag Ratios at 10,000 ft');
+legend('C_L/C_D', 'C_L^3/2/C_D');
+grid on;
+
+figure(5)
+plot(v_sl, P_engine*550.*ones(1,length(v_sl))*eta_p_maxsl, v_sl, D_tot_sl.*v_sl);
+title('Power Curves at Sea Level');
+xlabel('Velocity [fps]');
+ylabel('Power [ft-lbs/s');
+legend('Power Available', 'Power Required', 'Location', 'Northwest');
+grid on;
+
+figure(6)
+plot(v_10k, P_engine*550.*ones(1,length(v_10k))*eta_p_max10k, v_10k, D_tot_10k.*v_10k);
+title('Power Curves at 10,000 feet');
+xlabel('Velocity [fps]');
+ylabel('Power [ft-lbs/s');
+legend('Power Available', 'Power Required', 'Location', 'Northwest');
+grid on;
+
+figure(7)
+plot(v_sl, del_e_sl*180/pi, v_10k, del_e_10k*180/pi);
+title('Elevator Deflection Curves');
+xlabel('Velocity [fps]');
+ylabel('Elevator Deflection [deg]');
+legend('Sea Level', '10,000 Feet', 'Location', 'Northwest');
+grid on;
+
+figure(8)
+plot(real(Phu_roots), imag(Phu_roots),'bx', real(Short_roots), imag(Short_roots), 'rx', 'MarkerSize', 12);
+legend('Phugoid Mode', 'Short Period');
+title('Longitudinal Stability');
+xlabel('Real');
+ylabel('Imaginary');
+grid on;
+
+figure(9)
+plot(real(L_p), imag(L_p), 'bx', real(lam_spiral),  imag(lam_spiral), 'gx', real(dutch_roots), imag(dutch_roots), 'rx', 'MarkerSize', 12);
+legend('Roll Mode','Spiral Mode','Dutch Roll', 'Location', 'Northwest');
+title('Lateral Stability');
+xlim([-0.12, 0.02]);
+xlabel('Real');
+ylabel('Imaginary');
+grid on;
+
+figure(10)
+plot((D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)), CL_tot_sl, (D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)), CL_tot_10k);
+grid on;
+xlabel('C_D');
+ylabel('C_L');
+title('C_L vs. C_D');
+legend('Sea Level', '10,000 ft', 'Location', 'Northwest');
+grid on;
+
+figure(11)
+plot(alpha_10k*180/pi, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w))./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)));
+grid on;
+
+figure(12)
+plot(v_sl, v_sl./(63.92.*P_req_sl + 42.51));
+xlabel('Velocity [fps]');
+ylabel('Advanced Ratio');
+title('Advanced Ratio at Sea Level');
+grid on;
+
+figure(13)
+plot(v_10k, v_10k./(63.92.*P_req_10k + 42.51));
+xlabel('Velocity [fps]');
+ylabel('Advanced Ratio');
+title('Advanced Ratio at 10,000 Feet');
+grid on;
+
+figure(14)
+plot(v_sl, L_tot_sl, v_10k, L_tot_10k);
+xlabel('Velocity [fps]');
+ylabel('Lift [lbf]');
+title('Lift Produced');
+legend('Sea Level', '10,000 feet', 'Location', 'Northwest');
+grid on;
 
 %Check to see if Validity Struct is good
 Good_design = true;
@@ -652,53 +807,7 @@ if(Good_design) %If good, save the design in the struct array
     n_good = n_good + 1;
     
 %Plotting for sanity Checks -> Everything Appears to be normal
-% figure(1)
-% plot(v_sl, D_af_sl, v_sl, D_it_sl, v_sl, D_para_sl, v_sl, D_iw_sl, v_sl, D_tot_sl, v_sl, D_trim_sl);
-% legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Trim', 'Location', 'Northwest');
-% xlabel('Velocity [fps]');
-% ylabel('Drag [lbf]');
-% title('Drag at Sea Level');
-% grid on;
-% 
-% figure(2)
-% plot(v_10k, D_af_10k, v_10k, D_it_10k, v_10k, D_para_10k, v_10k, D_iw_10k, v_10k, D_tot_10k, v_10k, D_trim_10k);
-% xlabel('Velocity [fps]');
-% ylabel('Drag [lbf]');
-% title('Drag at 10,000 ft');
-% legend('Airfoil', 'Tail', 'Parasitic', 'Wing', 'Total', 'Trim', 'Location', 'Northwest');
-% grid on;
-% 
-% figure(3)
-% plot(v_sl, (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w))./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)), v_sl, ...
-%     (L_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)).^(3/2)./(D_tot_sl./(.5*rho_sl.*v_sl.^2*S_w)));
-% xlabel('Velocity [fps]');
-% ylabel('Lift/Drag Ratio [-]');
-% title('Lift/Drag Ratios at Sea Level');
-% legend('C_L/C_D', 'C_L^3/2/C_D');
-% grid on;
-% 
-% figure(4)
-% plot(v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w))./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)),...
-%     v_10k, (L_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)).^(3/2)./(D_tot_10k./(.5*rho_10k.*v_10k.^2*S_w)));
-% xlabel('Velocity [fps]');
-% ylabel('Lift/Drag Ratio [-]');
-% title('Lift/Drag Ratios at 10,000 ft');
-% legend('C_L/C_D', 'C_L^3/2/C_D');
-% grid on;
-% 
-% figure(5)
-% plot(v_sl, P_engine*550.*ones(1,length(v_sl))*eta_p_loit, v_sl, D_tot_sl.*v_sl);
-% xlabel('Velocity [fps]');
-% ylabel('Power [ft-lbs/s');
-% legend('Power Available', 'Power Required', 'Location', 'Northwest');
-% grid on;
-% 
-% figure(6)
-% plot(v_10k, P_engine*550.*ones(1,length(v_10k))*eta_p_loit, v_10k, D_tot_10k.*v_10k);
-% xlabel('Velocity [fps]');
-% ylabel('Power [ft-lbs/s');
-% legend('Power Available', 'Power Required', 'Location', 'Northwest');
-% grid on;
+
 
     %Design Parameters
     Good_designs(n_good).weight = W_tot;  %Total weight [lbs]
@@ -719,8 +828,8 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).b_h = b_h; %Horizontal tail span [ft]
     Good_designs(n_good).S_vt = S_vt; %Vertical tail surface area [ft^2]  (Might have to calculate this in while loop)
     Good_designs(n_good).b_v = b_v; %Vertical tail span [ft]
-    Good_designs(n_good).eng_ind = eng_index;  %Engine index
-    Good_designs(n_good).eng_hp = engines(eng_index,1);  %Engine power [hp]
+    %Good_designs(n_good).eng_ind = eng_index;  %Engine index
+   % Good_designs(n_good).eng_hp = engines(eng_index,1);  %Engine power [hp]
     Good_designs(n_good).W_S = W_tot/S_w;    %Wing Loading [lbs/ft^2]
     Good_designs(n_good).Preq_W = P_needed/W_tot;  %Power Loading [hp/lb]
     Good_designs(n_good).P_needed = P_needed;  %Power actually require [hp]
@@ -744,7 +853,7 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).Z_t = Z_t; %Height of the Tail from CG [ft]
     
     q = 1;
-    while(alpha_sl(q)*180/pi > 8)
+    while(alpha_sl(q)*180/pi > 10)
         q = q + 1;
         if(q == length(alpha_sl))
             break;
@@ -801,7 +910,11 @@ if(Good_design) %If good, save the design in the struct array
     Good_designs(n_good).Cn_P = - (CL_tot_10k(ind_loit)/8) +...
         (8/(3*pi))*(b_v/b_w)*V_V*CL_alpha_t;
     Good_designs(n_good).Cn_r = (-CD0_tot_10k(ind_loit)/4) - (2*eta*(l_v/b_w)*V_V*CL_alpha_t);
-
+    Good_designs(n_good).Cl_dela = 2*1*3.6*(1.3417)*(.2*chord_w*((8.40 - 1.44)/12))*cos(1)/(S_w*b_w);
+    Good_designs(n_good).Cn_dela = -.2*CL_tot_10k(ind_loit)*Good_designs(n_good).Cl_dela;
+    Good_designs(n_good).Cl_delr = 2*1*4.5*(19.25/24)*(.3*chord_ht*.9*b_v)*cos(1)/(S_vt*b_w);
+    Good_designs(n_good).Cn_delr = -.2*CL_tot_10k(ind_loit)*Good_designs(n_good).Cl_delr;
+    Good_designs(n_good).Cl_alpha_dot = 2*CL_alpha_t*eta*V_H*epsilon_alpha;
     
 else
     %Increase number
@@ -825,8 +938,8 @@ else
     Bad_designs(n_bad).b_h = b_h; %Horizontal tail span [ft]
     Bad_designs(n_bad).S_vt = S_vt; %Vertical tail surface area [ft^2]  (Might have to calculate this in while loop)
     Bad_designs(n_bad).b_v = b_v; %Vertical tail span [ft]
-    Bad_designs(n_bad).eng_ind = eng_index;  %Engine index
-    Bad_designs(n_bad).eng_hp = engines(eng_index,1);  %Engine power [hp]
+    %Bad_designs(n_bad).eng_ind = eng_index;  %Engine index
+    Bad_designs(n_bad).eng_hp = P_engine;  %Engine power [hp]
     Bad_designs(n_bad).W_S = W_tot/S_w;    %Wing Loading [lbs/ft^2]
     Bad_designs(n_bad).Preq_W = P_needed/W_tot;  %Power Loading [hp/lb]
     Bad_designs(n_bad).P_needed = P_needed;  %Power actually require [hp]
@@ -836,6 +949,8 @@ else
     Bad_designs(n_bad).chord_ht = chord_ht; %Hor. Tail chord [ft]
     Bad_designs(n_bad).gamma = gamma;
     Bad_designs(n_bad).Z_t = Z_t; %Height of the Tail from CG [ft]
+    Bad_designs(n_bad).static_margin = static_margin_full;
+    Bad_designs(n_bad).h_n = h_n;
 
     %Save the weight breakdown as well
     Bad_designs(n_bad).w_payload = W_payload(1);  %Weight of the payload [lbs]
@@ -868,7 +983,7 @@ else
     Bad_designs(n_bad).Valid_V_V = Validity.V_V;
     Bad_designs(n_bad).Valid_cg_full = Validity.cg_full;
     Bad_designs(n_bad).Valid_dihedral = Validity.dihedral;
-    Bad_designs(n_bad).Valid_engine = Validity.engine;
+    %Bad_designs(n_bad).Valid_engine = Validity.engine;
     Bad_designs(n_bad).Valid_converged = Validity.converged;
     Bad_designs(n_bad).Valid_Weight = Validity.Weight;
     Bad_designs(n_bad).Valid_mission = Validity.mission;
@@ -897,6 +1012,3 @@ if(n_bad)
 end
 fprintf('Done!\n');
     
-%TODO
-%Add more airfoils to database
-%TRIPLE CHECK LITERALLY EVERYTHING
